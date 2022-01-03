@@ -9,16 +9,20 @@ class SNDataArchive:
     def getSNDataFile(self, fileNum, data_type = 'real'):
         if data_type.lower() in ['art_lsst','artificial_lsst']:
             return self.artificial_lsst_sn_data_dir + self.artificial_lsst_sn_data_files[fileNum]
+        elif data_type.lower() in ['art_pantheon','artifical_pantheon']:
+            return self.sn_data_dir + self.artificial_pantheon_sn_data_files[fileNum]
         elif data_type.lower() in ['artificial_funct', 'art_funct']:
             return self.artificial_funct_sn_data_dir + self.artificial_funct_sn_data_files[fileNum]
         elif data_type.lower in ['art_survey','artifical_survey','art_surveys','artififical_survey']:
             return self.artificial_surveys_sn_data_dir + self.artificial_surveys_sn_data_files[fileNum]
         elif data_type.lower() in ['old_real', 'real_old']:
             return self.sn_data_dir + self.old_sn_data_files[fileNum]
-        else: 
-            return self.sn_data_dir + self.sn_data_files[fileNum] 
-   
-    
+        elif data_type.lower() in ['real_plus', 'pantheon_plus' ,'real_p']:
+            return self.sn_data_dir + self.pantheon_plus_blind_data_files[fileNum]
+        else:
+            return self.sn_data_dir + self.sn_data_files[fileNum]
+
+
     def __init__(self):
         dir_archive = DirectoryArchive()
         self.artificial_surveys_sn_data_files = {'0c':'SALT2mu_simoptc0_0.fitres',   '1c':'SALT2mu_simoptc0_1.fitres',   '2c':'SALT2mu_simoptc0_2.fitres',
@@ -41,29 +45,36 @@ class SNDataArchive:
                                                  '21g':'SALT2mu_simoptg0_21.fitres', '22g':'SALT2mu_simoptg0_22.fitres', '23g':'SALT2mu_simoptg0_23.fitres',
                                                  '24g':'SALT2mu_simoptg0_24.fitres', '25g':'SALT2mu_simoptg0_25.fitres', '26g':'SALT2mu_simoptg0_26.fitres',
                                                  '27g':'SALT2mu_simoptg0_27.fitres'  }
-        
-        self.artificial_lsst_sn_data_files = {1:'SALT2mu_fitopt_CT_LSST.fitres'} 
+
+        self.artificial_lsst_sn_data_files = {1:'SALT2mu_fitopt_CT_LSST.fitres'}
         self.artificial_funct_sn_data_files = {1: 'SALTmu_FITOPT000_MUOPT000_artBumpA2_10_mu2000_sig200_1.FITRES',
                                                2: 'SALTmu_FITOPT000_MUOPT000_artBumpA2_10_mu2000_sig200_2.FITRES',
-                                               3: 'SALTmu_FITOPT000_MUOPT000_artBumpA4_10_mu2000_sig400_1.FITRES', 
-                                               4: 'SALTmu_FITOPT000_MUOPT000_artBumpA4_10_mu2000_sig400_2.FITRES', 
+                                               3: 'SALTmu_FITOPT000_MUOPT000_artBumpA4_10_mu2000_sig400_1.FITRES',
+                                               4: 'SALTmu_FITOPT000_MUOPT000_artBumpA4_10_mu2000_sig400_2.FITRES',
                                                5: 'SALTmu_FITOPT000_MUOPT000_artZerod.FITRES'}
         self.old_sn_data_files = {1: 'SALT2mu_FITOPT000_MUOPT000.FITRES',
                                   2: 'SALT2mu_FITOPT011_MUOPT000.FITRES'}
         self.sn_data_files = {1: 'Ancillary_G10.FITRES'}
+        self.pantheon_plus_blind_data_files = {1:'PantheonPlusFinal.FITRES', 
+                                              2:'data_WIC_Pantheon_plus_filled.txt',#Old data files
+                                              3: 'FITOPT000_MUOPT000_PLUS.FITRES'  #Old data files
+                                              }
+        self.artificial_pantheon_sn_data_files = {1:'FITOPT000_MUOPT000.FITRES'}
         self.artificial_surveys_sn_data_dir = dir_archive.getArtificialSurveySNDataDirectory()
         self.artificial_lsst_sn_data_dir = dir_archive.getArtificialLSSTSNDataDirectory()
-        self.artificial_funct_sn_data_dir = dir_archive.getArtificialFunctSNDataDirectory() 
-        self.sn_data_dir = dir_archive.getSNDataDirectory() 
+        self.artificial_funct_sn_data_dir = dir_archive.getArtificialFunctSNDataDirectory()
+        self.sn_data_dir = dir_archive.getSNDataDirectory()
 
         self.survey_color_map = {'SDSS':'yellowgreen',        'ESSENCE':'azure',        'SNLS':'purple',        'CSP':'blue',
                                  'SUBARU':'blueviolet',       'DES':'coral',            'VIDEO':'crimson',     'LSST':'cyan',
-                                 'XIAN':'darkblue',           'PS1MD':'darkgoldenrod',  'JPAS':'darkgreen',    'LOWZ':'darkmagenta',
+                                 'XIAN':'khaki',           'PS1MD':'darkgoldenrod',  'JPAS':'darkgreen',    'LOWZ':'darkmagenta',
                                  'KAIT':'darkolivegreen',     'SNF':'darkorange',       'CFA3':'firebrick',    'CFA4':'fuchsia',
-                                 'SNUO2':'brown',            'SWIFT':'khaki',          'KAITM':'greenyellow', 'KAITW':'lightgrey',
+                                 'SNUO2':'brown',            'SWIFT':'darkblue',          'KAITM':'greenyellow', 'KAITW':'lightgrey',
                                  'CFA1':'lightblue',          'CFA2':'lightpink',       'CFA3S':'green',       'CFA3K':'magenta',
                                  'CFA4p1':'indigo',           'CFA4p2':'orange',        'CFA4p3':'bisque',     'CSP3':'orangered',
-                                 'PS1_HST_COMBINED':'silver', 'HST':'lime',             'SNAP':'violet',       'PS1_LOWZ_COMBINED':'red', 
+                                 'PS1_HST_COMBINED':'silver', 'HST':'lime',             'SNAP':'violet',       'PS1_LOWZ_COMBINED':'red',
                                  'WFIRST':'aliceblue',      'JWST':'skyblue',         'EUCLID':'tomato',     'CANDELS':'red',
                                  'CLASH':'turquoise',         'GAIA':'teal',            'HDF':'mintcream',     'FOUNDATION':'olive',
-                                 'SIMSED':'midnightblue',     'FLASH':'mediumseagreen', 'TEST':'mediumblue'    }  
+                                 'SIMSED':'midnightblue',     'FLASH':'mediumseagreen', 'TEST':'mediumblue',
+                                 'SWIFTNEW':'darkblue', 'MWEBV':'greyblue', 'ASASSN':'darkred'
+                                     }

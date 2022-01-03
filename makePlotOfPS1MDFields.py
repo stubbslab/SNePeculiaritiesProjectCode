@@ -17,8 +17,7 @@ from matplotlib.patches import Rectangle
 import loadSN as lsn
 
 
-class PanStarsFieldManager:
-
+#class PanStarsFieldManager:
 def getErroneousRedshiftPlot(zg_of_z_funct, z_space,
                              r_of_z_interp = None,
                              zHD = 1, z_include_range = [0.0, np.inf], surveys_of_interest = ['all'], surveys_to_excise = [''],
@@ -196,14 +195,6 @@ def doMinimization(fit_funct, zs, resids, errs, fit_params_A, fit_params_B, fit_
     return [this_funct_fit, final_chisqr]
 
 
-def d_H_d_z (single_z):
-
-
-def redshift_of_v_funct(beta):
-    redshift = np.sign(beta) * (np.sqrt((1+abs(beta))/(1-abs(beta))) - 1)
-    return redshift
-
-def d_z_D_growth_over_D(single_z):
 
 
 def computeVelocityFieldFromNFWHalo(zs_to_calc, central_z, critical_mass, concentration, impact_param,
@@ -237,7 +228,7 @@ def makePlotOfPS1MDFields(data_set,
                           n_bins = 20, bin_scheme = 'bin_size', save = 1, show = 0, surveys_to_display = 'all', surveys_to_ignore = [], fit_information = {'funct':'none'}, show_fit_label = 1, z_range = [-0.1, 3.0],
                           res_range = [-0.8, 0.8], binned_res_range = [-0.4, 0.4], archive_to_use = 'PS1MD' , pull_extinctions = 0, figsize = [16.0, 8.0], separate_fields_by_plot = 0,
                           n_randomizations = 0, n_z_bins = 10, zHD = 0, OmM = 0.3, OmL = 0.7, Om0 = 1.0, OmR = 0.0, H0 = 70.0,
-                          interp_z_params = [0.0, 100.0, 1001]):
+                          interp_z_params = [0.0, 100.0, 1001], data_type = 'pantheon_plus'):
 
     master_start = time.time()
     dir_archive = DirectoryArchive()
@@ -258,7 +249,7 @@ def makePlotOfPS1MDFields(data_set,
         archive = PSArch
     fields = archive.fields
 
-    all_sns = loadSN(1, ['all'], pull_extinctions = pull_extinctions, zHD = zHD, OmM = OmM, OmL = OmL, Om0 = Om0, OmR = OmR, H0 = H0)
+    all_sns = loadSN(1, ['all'], data_type = data_type, pull_extinctions = pull_extinctions, zHD = zHD, OmM = OmM, OmL = OmL, Om0 = Om0, OmR = OmR, H0 = H0)
     all_sns = [sn for sn in all_sns if not(sn['survey'] in surveys_to_ignore)]
     H_of_z = lambda z_for_H: np.sqrt((1 + z_for_H) ** 3 * OmM + (1 + z_for_H) ** 0 * OmL + (1 + z_for_H) ** 4 * OmR)
     d_H_d_z = lambda z_for_H: 0.5 * 1.0 / np.sqrt((1 + z_for_H) ** 3 * OmM + (1 + z_for_H) ** 0 * OmL + (1 + z_for_H) ** 4 * OmR) * (3.0 * (1 + z_for_H) ** 2.0 * OmM + 4.0 * (1 + z_for_H) ** 3 * OmR)
@@ -396,8 +387,6 @@ def makePlotOfPS1MDFields(data_set,
                     #print ('Showing text: ' + fit_string)
                     ax.text(0.0,-0.5 + 0.1 * (fit_position_index) ,fit_string, color = color)
                     fit_position_index = fit_position_index + 1
-
-
 
         fit_funct = lambda zs, A, mean, sig, shift: A * np.exp(-(mean - zs) ** 2.0 / (2.0 * sig ** 2.0)) + shift
         extra_z_of_zMeas_funct =  lambda single_z, A, mean, sig: A * np.exp(-(single_z - mean) ** 2.0 / (2.0 * sig ** 2.0))
@@ -653,4 +642,4 @@ def makePlotOfPS1MDFields(data_set,
         self.Om0 = Om0
         self.OmR = OmR
         self.H0 = H0
-        self.interp_z_params = interp_z_params 
+        self.interp_z_params = interp_z_params

@@ -1,0 +1,47 @@
+import math
+from loadSN import loadSN
+from AstronomicalArchive import AstronomicalArchive 
+
+
+def computeHemisphericResidual(data_set, axis, opening_angle = math.pi / 2.0, surveys_of_interest = ['all'], pull_extinctions = 1, statistic_funct = 'wmean', statistic_err_funct = 'wmean'):
+    astro_archive = AstronomicalArchive()
+    deg_to_rad = astro_archive.getDegToRad()
+
+    #make sure axis is a unit vector
+    axis_mag = math.sqrt(sum([float(axis_elem) ** 2.0 for axis_elem in axis ]))
+    axis = [float(axis_elem) / axis_mag for axis_elem in axis]
+    
+    all_sns = loadSN(data_set, ['all'], pull_extinctions = pull_extinctions)
+
+    if surveys_of_interest[0].lower() == 'all':
+        surveys_of_interest = np.unique([sn['survey'] for sn in all_sns]).tolist()
+
+    upper_hem_sn = []
+    lower_hem_sn = []
+
+    for sn in all_sns:
+        if sn['survey'] in surveys_of_interest:
+            RA = sn['RA']
+            RA = RA * deg_to_rad
+            Dec = sn['Dec']
+            Dec = Dec * deg_to_rad
+            sn_axis = [math.cos(RA) * math.sin(Dec), math.sin(RA) * math.sin(Dec), math.cos(Dec)]
+            #angle between axis and sn can be computed from dot product of two axes
+            sn_off_angle = math.acos(sum([ sn_axis[i] * axis[i] for i in range(len(axis)) ]))
+            if sn_off_angle <= opening_angle: upper_hem_sn = upper_hem_sn + [sn]
+            if sn_off_angle >= math.pi - opening_angle: lower_hem_sn = lower_hem_sn + [sn]
+
+    if statistic_funct is 'wmean':
+        statistic_funct = lambda resids, resid_errs: sum([resids[i] * 1.0 / (resid_errs[i] ** 2.0)  for i in range(len(resids))]) / sum(1.0 / (resid_errs[i] ** 2.0))
+    elif statistic_funct is 'mean':
+        statistic_funct = lambda resids, resid_errs: sum(resids) / float(len(resids)) 
+    if statistic_err_funct is 'none':
+        statistic_err_funct = lambda resids, resid_errs: 1.0
+    elif statistic_err_funct is 'wmean':
+        statistic_err_funct = lambda resids, resid_errs: math.sqrt(1.0 / sum(1.0 / (resid_errs[i] ** 2.0)))
+    upper_hem_val = statistic_funct([sn['muDiff'] for sn in upper_hem_sn], [sn['muErr'] for sn in upper_hem_sn])
+    upper_hem_err = statistic_err_funct([sn['muDiff'] for sn in upper_hem_sn], [sn['muErr'] for sn in upper_hem_sn])
+    lower_hem_val = statistic_funct([sn['muDiff'] for sn in lower_hem_sn], [sn['muErr'] for sn in lower_hem_sn])
+    lower_hem_err = statistic_err_funct([sn['muDiff'] for sn in lower_hem_sn], [sn['muErr'] for sn in lower_hem_sn])
+
+    return [[upper_hem_val, upper_hem_err], [lower_hem_val, lower_hem_err]]

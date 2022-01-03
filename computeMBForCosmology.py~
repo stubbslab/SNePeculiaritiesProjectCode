@@ -1,0 +1,5 @@
+
+
+def computeMBForCosmology(z):
+
+    return 0.0

@@ -1,0 +1,8 @@
+import numpy as np
+import math
+from scipy.optimize import curve_fit 
+
+#val_array is an array of arrays, each of which is a piece of the data to be fit
+def computeFitForSNData(val_array):
+
+    

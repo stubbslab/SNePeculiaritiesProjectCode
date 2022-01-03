@@ -1,2 +1,1 @@
-A set of python code to analyze SNe Ia data to search for 3D peculiarities in
-    SNe Ia data.
+A set of python code to analyze SNe Ia data, focused on looking for deviations from basic LCDM.

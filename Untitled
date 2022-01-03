@@ -1,0 +1,43 @@
+@article{Perlmutter99,
+  author={S. Perlmutter and G. Aldering and G. Goldhaber and R. A. Knop and P. Nugent and P. G. Castro and S. Deustua and S. Fabbro and A
+Goobar and D. E. Groom and I. M. Hook and A. G. Kim and M. Y. Kim and J. C. Lee and N. J. Nunes and R. Pain and C. R. Pennypacker and R.
+Quimby and C. Lidman and R. S. Ellis and M. Irwin and R. G. McMahon and P. Ruiz-Lapuente and N. Walton and B. Schaefer and B. J.
+Boyle and A. V. Filippenko and T. Matheson and A. S. Fruchter and N. Panagia and H. J. M. Newberg and W. J. Couch and The
+Supernova Cosmology Project},
+  title={Measurements of $\Omega$ and $\Lambda$ from 42 High-Redshift Supernovae},
+	doi_suppressed = {10.1086/307221},
+	url = {https://doi.org/10.1086%2F307221},
+	year = 1999,
+	month = {jun},
+	publisher = {{IOP} Publishing},
+	volume = {517},
+	number = {2},
+	pages = {565--586} ,
+	journal = {The Astrophysical Journal}
+}
+
+@article{Riess98,
+   title={Observational Evidence from Supernovae for an Accelerating Universe and a Cosmological Constant},
+   volume={116},
+   ISSN={0004-6256},
+   url={http://dx.doi.org/10.1086/300499},
+   DOI={10.1086/300499},
+   number={3},
+   journal={The Astronomical Journal},
+   publisher={American Astronomical Society},
+   author={Riess, Adam G. and Filippenko, Alexei V. and Challis, Peter and Clocchiatti, Alejandro and Diercks, Alan and Garnavich, Peter M. and Gilliland, Ron L. and Hogan, Craig J. and Jha, Saurabh and Kirshner, Robert P. and et al.},
+   year={1998},
+   month={Sep},
+   pages={1009–1038}
+}
+
+@article{emcee,
+   author = {{Foreman-Mackey}, D. and {Hogg}, D.~W. and {Lang}, D. and {Goodman}, J.},
+    title = {emcee: The MCMC Hammer},
+  journal = {PASP},
+     year = 2013,
+   volume = 125,
+    pages = {306-312},
+   eprint = {1202.3665},
+      doi = {10.1086/670067}
+}v

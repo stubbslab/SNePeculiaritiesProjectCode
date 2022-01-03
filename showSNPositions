@@ -1,0 +1,20 @@
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+from logList import logList
+import RawSNDataStorer import RawSNDataStorer 
+
+def showSNPositions(fileNum):
+    sn_storer = RawSNDataStorer(fileNum, RA_lims = [0.0, 360.0], Dec_lims = [-180.0, 180.0])
+
+    sn_ras = sn_storer.getDataArray('RA')
+    sn_decs = sn_storer.getDataArray('DECL') 
+    
+    plt.scatter(sn_ras, sn_decs)
+    plt.x_lim = x_lims
+    plt.y_lim = y_lims
+    plt.xlabel('RA')
+    plt.ylabel('Dec')
+    plt.title('SN Positions on Sky') 
+    plt.show() 

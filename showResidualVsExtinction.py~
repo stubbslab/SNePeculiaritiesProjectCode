@@ -1,0 +1,44 @@
+import numpy as np
+import math
+from calculateAngularSeparation import calculateAngularSeparation
+from SNDataArchive import SNDataArchive 
+from RawSNDataStorer import RawSNDataStorer
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+from logList import logList
+from computeMuForCosmology import computeMuForCosmology
+import scipy.integrate as integrate
+from binData import binData
+from query3dDustMap import query
+from PanStars1Archive import PanStars1Archive
+from loadSN import loadSN 
+
+#possible plot types: 'on_sky_residual_contour', 'sn_positions', 'residuals_v_z'
+def showResidualVsExtinction(data_set, plot_type = 'sn_positions', n_levels = 20, surveys_to_display = ['PS1MD'], legend = 1):
+
+    sn_archive = SNDataArchive()
+    sn_storer = RawSNDataStorer(data_set)
+    sn_ras = sn_storer.getDataArray('RA')
+    sn_ras = [float(ra) for ra in sn_ras]
+    sn_decs = sn_storer.getDataArray('DECL')
+    sn_decs = [float(dec) for dec in sn_decs]
+    sn_zs = sn_storer.getDataArray('zHD')
+    sn_zs = [float(z) for z in sn_zs]
+    sn_mBs = sn_storer.getDataArray('mB')
+    sn_mBs = [float(mB) for mB in sn_mBs]
+    sn_mBErrs = sn_storer.getDataArray('mBERR')
+    sn_mBErrs = [float(mBErr) for mBErr in sn_mBErrs]
+    sn_mus = sn_storer.getDataArray('MU')
+    sn_mus = [float(mu) for mu in sn_mus]
+    sn_muErrs = sn_storer.getDataArray('MUERR') 
+    sn_muErrs = [float(muErr) for muErr in sn_muErrs]
+    sn_surveys = sn_storer.getSurveys()
+
+    unique_surveys = np.unique(np.array(sn_surveys))
+    #print 'unique_surveys = '
+    #print unique_surveys 
+    if surveys_to_display == ['all']:
+        surveys_to_display = unique_surveys 
+    
+    survey_color_map = sn_archive.getSurveyColorMap() 
+    sn_colors = np.array([ survey_color_map[survey] for survey in sn_surveys ])

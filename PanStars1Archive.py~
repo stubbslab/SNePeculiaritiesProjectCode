@@ -1,0 +1,160 @@
+#Define an archive specific to the Pan Stars-1 medium field Sn surveys.
+# This can just help me to expedite analysis that want to focus just on those fields.
+# There are 10 fields, which are (arbtrarily) numbers 0-9.  They can be specifically requested.
+
+from AstronomicalParameterArchive import AstronomicalParameterArchive
+from SNDataArchive import SNDataArchive
+from RawSNDataStorer import RawSNDataStorer
+import cantrips as c
+import matplotlib.pyplot as plt
+import CosmologicalParameterArchive as cpa
+import scipy.integrate as integrate
+import numpy as np
+from PyAstronomy import pyasl
+import time 
+
+
+class PanStars1Archive:
+
+    def generateSDSSHistograms(self, fields = [0, 2, 3, 4, 5, 6, 7, 8, 9], hist_cropped_field = 1, hist_full_field = 1, plot_array_rows = 5, hist_colors = ['k','r'],
+                               ra_index = 1, dec_index = 2, redshift_index = 11, n_bins = 50, figsize = (10,8)):
+        sdss_loads = {field:c.readInColumnsToList(self.SDSSPhotozs[field],self.SDSSDir, n_ignore = 2, delimiter= ',') for field in fields}
+        f, axarr = plt.subplots(plot_array_rows, (len(fields) // plot_array_rows) + 1, sharex = True, sharey = True, figsize = figsize)
+        plt.subplots_adjust(hspace=0.0)
+        plt.suptitle('SDSS Photo-zs in PS1MD Fields (white = 7 deg. diam. circle around field; orange = just field)') 
+        for i in range(len(fields)):
+            ax = axarr[plot_array_rows - i % plot_array_rows - 1, i // plot_array_rows]
+            field = fields[i] 
+            ras = [float(ra) for ra in sdss_loads[field][ra_index]]
+            decs = [float(dec) for dec in sdss_loads[field][dec_index]]
+            zs = [float(z) for z in sdss_loads[field][redshift_index]]
+            if hist_full_field:
+                ax.hist(zs, edgecolor = hist_colors[0], bins = n_bins, fill = False)
+            if hist_cropped_field:
+                field_bounds = self.fields[field] 
+                ax.hist([zs[i] for i in range(len(zs)) if (ras[i] > field_bounds[0] and ras[i] < field_bounds[1]
+                                                           and decs[i] > field_bounds[2] and decs[i] < field_bounds[3]) ],
+                        edgecolor = hist_colors[0], bins = n_bins, fill = hist_colors[1])
+            if i % plot_array_rows == 0: ax.set_xlabel('SDSS photometric redshift') 
+            if i // plot_array_rows == 0: ax.set_ylabel('# Galaxies in Bin')
+            ax.text(0.5, 700, 'PS1MD Field ' + str(field))
+        
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95]) 
+        plt.show()
+        return 1
+
+    def measureSDSSGalDensity(self, target_pos, selection_rad = 'full', smoothing_rad_Mpc = 50, ra_index = 1, dec_index = 2, redshift_index = 11, field = 0):
+
+        cosmo_arch = cpa.CosmologicalParameterArchive()
+        OmM = cosmo_arch.getOmegaM()[0]
+        OmL = cosmo_arch.getOmegaLambda()[0]
+        OmR = cosmo_arch.getOmegaR()[0]
+        H_scaled = lambda z: np.sqrt((1.0 + z) ** 3.0 * OmM + (1.0 + z) ** 4.0 * OmR + OmL)
+        c_light = cosmo_arch.getc() # in km/s
+        H0 = cosmo_arch.getH0()[0]
+
+        print ('Loading full galaxy archive...')
+        start = time.time() 
+        sdss_load = c.readInColumnsToList(self.SDSSPhotozs[field],self.SDSSDir, n_ignore = 2, delimiter= ',')
+        n_loads = len(sdss_load[0])
+        end = time.time()
+        print ('Took ' + str(end - start) + 's') 
+        print ('Computing parameters for ' + str(n_loads) + ' loaded galaxies...')
+        start = time.time() 
+        all_ras = [float(ra) for ra in sdss_load[ra_index]]
+        all_decs = [float(dec) for dec in sdss_load[dec_index]]
+        all_zs = [float(z) for z in sdss_load[redshift_index]]
+        del sdss_load 
+        all_a_s = [1.0 / (1.0 + z) for z in all_zs]
+        all_comoving_dists = [c_light / H0 * integrate.quad(H_scaled, 0, z)[0]  for z in all_zs] # in units of Mpc
+        all_proper_dists = [ all_a_s[i] * all_comoving_dists[i] for i in range(len(all_zs)) ]
+        end = time.time()
+        print ('Took ' + str(end - start) + 's') 
+        print ('Selecting subgroup of galaxies in viewing radius...')
+        start = time.time() 
+        if selection_rad in ['full','Full','FULL','all','All','ALL']:
+            ras = all_ras
+            decs = all_decs
+            zs = all_zs
+        else:
+            valid_indeces = [i for i in range(len(all_zs)) if pyasl.getAngDist(target_pos[0], target_pos[1], all_ras[i], all_decs[i]) < selection_rad] 
+            ras, decs, zs = [ [all_ras[i] for i in valid_indeces], [all_decs[i] for i in valid_indeces], [all_zs[i] for i in valid_indeces] ]
+        a_s = [1.0 / (1.0 + z) for z in zs]
+        comoving_dists = [c_light / H0 * integrate.quad(H_scaled, 0, z)[0]  for z in zs] # in units of Mpc
+        proper_dists = [ a_s[i] * comoving_dists[i] for i in range(len(zs)) ]
+
+        n_gal_starts = np.arange(min(all_comoving_dists), max(all_comoving_dists), smoothing_rad_Mpc)
+        end = time.time()
+        print ('Took ' + str(end - start) + 's') 
+        print ('n_gal_starts = ' + str(n_gal_starts)) 
+        comoving_bins = [[] for bin_start in n_gal_starts]
+        print ('Binning subselection galaxies...')
+        start = time.time() 
+        for i in range(len(comoving_dists)):
+            comoving_dist = comoving_dists[i] 
+            for j in range(len(n_gal_starts)):
+                bin_start = n_gal_starts[j] 
+                if comoving_dist < bin_start:
+                    comoving_bins[j - 1] = comoving_bins[j - 1] + [i]
+                    break
+                if comoving_dist > n_gal_starts[-1]:
+                    comoving_bins[-1] = comoving_bins[-1] + [i]
+                    break
+        end = time.time()
+        print ('Took ' + str(end - start) + 's') 
+        print ('Binning all galaxies...')
+        start = time.time() 
+        all_comoving_bins = [[] for bin_start in n_gal_starts]
+        for i in range(len(all_comoving_dists)):
+            comoving_dist = all_comoving_dists[i] 
+            for j in range(len(n_gal_starts)):
+                bin_start = n_gal_starts[j] 
+                if comoving_dist < bin_start:
+                    all_comoving_bins[j - 1] = all_comoving_bins[j - 1] + [i]
+                    break
+                if comoving_dist > n_gal_starts[-1]:
+                    all_comoving_bins[-1] = all_comoving_bins[-1] + [i]
+                    break 
+
+        end = time.time()
+        print ('Took ' + str(end - start) + 's') 
+        print ('Plotting...') 
+        n_gals_in_shells = []
+        #f, axarr = plt.subplots(2,1) 
+        #plt.plot(n_gal_starts, [( len(all_comoving_bins[i]) - len(comoving_bins[i]) ) if len(all_comoving_bins[i]) > 0 else 0.0 for i in range(len(comoving_bins))], c = 'r')
+        plt.plot(n_gal_starts, [len(one_bin) for one_bin in all_comoving_bins], c = 'b')
+        plt.plot(n_gal_starts, [len(one_bin) for one_bin in comoving_bins], c = 'r')
+        plt.plot(n_gal_starts, [( len(all_comoving_bins[i]) - len(comoving_bins[i]) ) if len(all_comoving_bins[i]) > 0 else 0.0 for i in range(len(comoving_bins))], c = 'purple')
+        end = time.time()
+        print ('Took ' + str(end - start) + 's')  
+        plt.show()
+
+        return 1 
+        
+        
+
+    def __init__(self):
+        self.ps_survey = 'PS1MD'
+
+        #These are the on-sky regions that contain a given set of observations.
+        #  They are not actual regions of observation; just regions in which all observations
+        #  from a given field are contained.  
+        self.fields = {0:[34.5,37.5,-6.0,-2.5], #in: SDSS
+                       1:[51.5,55.0,-29.5,-26.0],#in: 
+                       2:[128.0,133.0,43.0,45.5],#in: SDSS
+                       3:[148.5,152.0,0.5,4.0],#in: SDSS
+                       4:[159.5,164.0,56.5,59.5],#in: SDSS
+                       5:[183.0,187.0,45.5,48.5],#in: SDSS
+                       6:[211.5,216.5,51.0,54.5],#in: SDSS
+                       7:[241.0,246.0,53.5,56.5],#in: SDSS
+                       8:[332.0,336.0,-1.5,2.0],#in: SDSS
+                       9:[350.0,354.0,-2.0,1.0] #in: SDSS
+        }
+        self.field_colors = {0:'blue', 1:'red', 2:'yellow', 3:'orange',
+                             4:'cyan', 5:'limegreen', 6:'Peru', 7:'Salmon',
+                             8:'Purple', 9:'Thistle'}
+
+        self.SDSSDir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/SNIsotropyProject/SDSSGalaxies/' 
+        self.SDSSPhotozs = {key: 'SDSS_PSSuperField' + str(key) + '_SDSSGals_Allpz.csv' for key in [0, 2, 3, 4, 5, 6, 7, 8, 9]}
+        self.SDSSPhotozs[0] = 'SDSS_fullCoverage_SDSSGals_pzAll.csv'  
+        

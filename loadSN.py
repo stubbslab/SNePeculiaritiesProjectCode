@@ -7,16 +7,28 @@ import csv
 from CosmologicalCalculator import CosmologicalCalculator
 from astropy.coordinates import SkyCoord
 import astropy.units as units
+import cantrips as can
 #from dustmaps.bayestar import BayestarWebQuery
 
-def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_extinctions = 1, save_cols = [], file_name = 'Sn_data_file.csv', relevent_indeces = 'all', zHD = 0,
-           OmM = 0.3, OmL = 0.7, OmR = 0.0, H0 = 70.0, Om0 = 1.0):
+def loadCepheidSN(cepheid_data_file = 'calibratorset.txt', cepheid_data_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/SNIsotropyProject/OriginalSNDataFiles/'):
+    cepheid_data = can.readInColumnsToList(cepheid_data_file, file_dir = cepheid_data_dir, n_ignore = 1, delimiter = ' ', verbose = 0,)
+    sn_ids = cepheid_data[0]
+    hostmasses = cepheid_data[1]
+    uMg_color = cepheid_data[4]
+    return sn_ids
+
+
+def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_extinctions = 0, save_cols = [], file_name = 'Sn_data_file.csv', relevent_indeces = 'all', zHD = 1,
+           OmM = 0.3, OmL = 0.7, OmR = 0.0, H0 = 70.0, Om0 = 1.0, verbose = 1):
 
     sn_archive = SNDataArchive()
-    sn_storer = RawSNDataStorer(data_set, data_type = data_type, relevent_indeces = relevent_indeces  )
+    sn_storer = RawSNDataStorer(data_set, data_type = data_type, relevent_indeces = relevent_indeces, verbose = verbose)
     sn_ras = sn_storer.getDataArray('RA')
     sn_ras = [float(ra) for ra in sn_ras]
-    sn_decs = sn_storer.getDataArray('DECL')
+    try:
+        sn_decs = sn_storer.getDataArray('DECL')
+    except KeyError:
+        sn_decs = sn_storer.getDataArray('DEC')
     sn_decs = [float(dec) for dec in sn_decs]
     sn_zHDs = sn_storer.getDataArray('zHD')
     sn_zHDs = [float(z) for z in sn_zHDs]
@@ -44,9 +56,11 @@ def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_ext
     sn_mus_pred =  sn_storer.getDataArray('MUMODEL')
     sn_mus_pred = [float(mu) for mu in sn_mus_pred]
     sn_surveys = sn_storer.getSurveys()
-    print ('Read in all values. ')
 
-    cosmo_calc = CosmologicalCalculator(zs = sn_zs, )
+    sn_ids = (sn_storer.getDataArray('CID') if sn_storer.checkIfKeywordInDict('CID') else sn_storer.getDataArray('ID'))
+    if verbose: print ('Read in all values. ')
+
+    cosmo_calc = CosmologicalCalculator(zs = sn_zs, verbose = verbose )
     sn_ts = cosmo_calc.ts
     sn_taus = cosmo_calc.taus
 
@@ -59,7 +73,7 @@ def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_ext
         surveys_of_interest = unique_surveys
 
     #function_to_minimize = lambda OmM: np.sum(np.array(sn_mus) - np.array(sn_mus_pred))
-    print ('[OmM, OmL, OmR, H0, Om0] = ' + str([OmM, OmL, OmR, H0, Om0]) )
+    if verbose: print ('[OmM, OmL, OmR, H0, Om0] = ' + str([OmM, OmL, OmR, H0, Om0]) )
     expected_mus = [computeMuForCosmology(z, OmM = OmM, OmL = OmL, OmR = OmR, H0 = H0, Om0 = Om0, use_canon_params = 0) for z in sn_zs]
     mu_diffs = [sn_mus[i] - expected_mus[i] for i in range(len(sn_mBs))]
     sn_extinctions = []
@@ -88,7 +102,7 @@ def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_ext
         sn_extinctions = bayestar(coords, mode='median')
         sn_ext_errs = [1.0 for i in range(len(sn_ras))]
     else:
-        print ('Extinctions not pulled; set to placeholder value.  DO NOT USE THIS ARRAY FOR ANY EXTINCTION CALCULATIONS!' )
+        if verbose: print ('Extinctions not pulled; set to placeholder value.  DO NOT USE THIS ARRAY FOR ANY EXTINCTION CALCULATIONS!' )
         sn_extinctions = [0.0 for i in range(len(sn_ras))]
         sn_ext_errs = [1.0 for i in range(len(sn_ras))]
 
@@ -97,7 +111,7 @@ def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_ext
     sns = [ {'RA':sn_ras[i], 'Dec':sn_decs[i], 'z':sn_zs[i], 'zHD':sn_zHDs[i], 'zCMB':sn_zCMBs[i], 't':sn_ts[i], 'tau':sn_taus[i], 'mu':sn_mus[i], 'muDiff':mu_diffs[i],
              'muErr':sn_muErrs[i], 'muPred':sn_mus_pred[i], 'dl':sn_dls[i], 'dlErr':sn_dlErrs[i], 'survey':sn_surveys[i],
              'color':sn_colors[i], 'extinction':sn_extinctions[i], 'extinctionErr':sn_ext_errs[i], 'muDiffWMean':sn_weighted_means_by_survey[sn_surveys[i]],
-             'given_extinction':sn_given_extinctions[i] }
+             'given_extinction':sn_given_extinctions[i], 'SNID':sn_ids[i] }
             for i in range(len(sn_zs)) if sn_surveys[i] in surveys_of_interest]
 
     if len(save_cols) > 0:
@@ -106,7 +120,4 @@ def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_ext
             csv_writer.writerow([column for column in save_cols])
             for sn in sns:
                 csv_writer.writerow([sn[column] for column in save_cols])
-
-
-
     return sns

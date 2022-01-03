@@ -1,0 +1,13 @@
+python 
+import ReplicateRingermacherResults as rrr 
+n_randomizations = 100 
+true_rr = rrr.RingermacherReplicator(rand_around_canon = 0)
+rand_rrs = [0 for i in range(n_randomizations)]
+for i in range(n_randomizations): 
+    print ('Working on randomization ' + str(i) + ' of ' + str(n_randomizations)) 
+    rand_rr = rrr.RingermacherReplicator(rand_around_canon = 1)
+    rand_rrs[i] = rand_rr 
+
+rrr.plotFinalResidualsInTimeSpaceOfRingermacherResults(rand_rrs, true_ringermacher_replicator = true_rr, save_fig = 1, show_fig = 0, save_fig_name = 'SampleRandomPlots_True_at_4_0_NEW_cCoded.pdf', n_fig_units = [10,1], figsize = [12,15], labelpad = 1, true_ringermacher_indeces=[4,0], true_color = 'k')
+rrr.showDistributionOfRingermacherPeriodogram(rand_rrs, true_ringermacher_replicator = true_rr, save_fig = 1, show_fig = 0, save_fig_name = 'RingermacherFourierPlot_NEW.pdf')
+rrr.generateHistOfChosenFrequency(rand_rrs, 7.5, true_ringermacher_replicator = true_rr, save_fig = 1, show_fig = 0, save_fig_name = 'RingermacherHistogramAtChosenFrequency_NEW.pdf')

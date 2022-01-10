@@ -403,18 +403,32 @@ class PanStarsFieldManager:
             print ('[single_r, central_r, r_incidence, leg] = ' + str([single_r, central_r, r_incidence, leg]  ))
         return leg
 
-    def r_well_from_geometry(self, single_r, central_r, r_incidence ):
-        r_well =  np.sqrt(r_incidence ** 2.0 + self.r_incidence_leg(single_r, central_r, r_incidence) ** 2.0)
-        return r_well
+    #This is what I was doing previously which I think incorrectly assumes right angle
+    #def r_well_from_geometry(self, single_r, central_r, r_incidence ):
+    #    r_well =  np.sqrt(r_incidence ** 2.0 + self.r_incidence_leg(single_r, central_r, r_incidence) ** 2.0)
+    #    return r_well
+
+    #This is the correct formula, I think.
+    def r_well_from_geometry(self, single_rs, central_r, angular_offsets ):
+        #delta_dists = single_rs - central_r
+        r_wells =  np.sqrt(single_rs ** 2.0 + central_r ** 2.0 - 2.0 * single_rs * central_r * np.cos(angular_offsets))
+        return r_wells
 
     #This seems wrong?
     def sin_of_infall_angle_relative_to_los(self, single_r, central_r, r_incidence):
         sin_r = self.r_incidence_leg(single_r, central_r, r_incidence) / self.r_well_from_geometry(single_r, central_r, r_incidence)
         return sin_r
 
-    def cos_of_infall_angle_relative_to_los(self, single_r, central_r, r_incidence):
-        cos_r = self.r_incidence_leg(single_r, central_r, r_incidence) / self.r_well_from_geometry(single_r, central_r, r_incidence)
-        return cos_r
+    #I believe this is the correct formula, though there is the outstanding question of handling this in an expanding Universe.
+    def cos_of_infall_angle_relative_to_los(self, single_rs, central_r, angular_offsets):
+        r_seps = self.r_well_from_geometry(single_rs, central_r, angular_offsets)
+        cos_rs = (single_rs ** 2.0 + r_seps ** 2.0 - central_r ** 2.0) / (2.0 * single_rs * r_seps)
+        return cos_rs
+
+    #This is the formula I was using previously...
+    #def cos_of_infall_angle_relative_to_los(self, single_r, central_r, r_incidence):
+    #    cos_r = 1 - np.cos()
+    #    return cos_r
 
     def overdensty_vir_of_z (self, single_z):
         overdensity = (18.0 * np.pi + 82.0 * ((self.Om0 *(1.0 + single_z) ** 3.0) / H_of_z(single_z) ** 2.0) - 39.0 * ((self.Om0 *(1.0 + single_z) ** 3.0) / H_of_z(single_z) ** 2.0) ** 2.0)
@@ -433,7 +447,7 @@ class PanStarsFieldManager:
     def nfw_mass_enclosed_ours(self, halo_density, radius_in_scale_radii):
         #r_overdensity = self.r_overdensity(mass_overdensity, critical_density, overdensity)
         #M_enc = self.nfw_unitless_over_int(concentration * r / r_overdensity) / self.nfw_unitless_over_int(concentration) * mass_overdensity
-        M_enc = halo_density * (np.log(radius_in_scale_radii + 1.0) + 1.0 / (1.0 + radius_in_scale_radii))
+        M_enc = halo_density * (np.log(radius_in_scale_radii + 1.0) - radius_in_scale_radii / (1.0 + radius_in_scale_radii))
         return M_enc
 
     def point_mass_enclosed(self, halo_mass):
@@ -471,21 +485,31 @@ class PanStarsFieldManager:
 
     #Mass should be in M_sun X 10 ^(12) ; returns r ** 2.0 * int(delta r*2 4 pi dr) in units of Mpc
     # delta_portion_funct_ours(single_z, central_z, halo_density, r_scale, b_impact, overdensity)
-    def delta_portion_funct_ours(self, single_z, central_z, halo_mass, r_scale, r_incidence  ):
-        single_r = self.r_of_z_interp(single_z)
+    def delta_portion_funct_NFW_ours(self, single_zs, central_z, halo_mass, r_scale, angular_offsets, concentration = 10  ):
+        single_rs = self.r_of_z_interp(single_zs)
         central_r = self.r_of_z_interp(central_z) #units of Mpc
-        critical_density = self.crit_density(single_z) #units of GMsun / Mpc ^ 3
+        critical_density = self.crit_density(central_z) #units of GMsun / Mpc ^ 3
         #r_overdensity = self.r_overdensity(M_overdensity, critical_density, overdensity)
         #rs = r_overdensity / concentration
-        r_well = self.r_well_from_geometry(single_r, central_r, r_incidence)
+        r_wells = self.r_well_from_geometry(single_rs, central_r, angular_offsets)
 
-        #M_enc = self.nfw_mass_enclosed_ours(halo_density, r_well / r_scale )
-        #M_enc_scaled = M_enc * r_scale ** 3.0
+        M_encs = self.nfw_mass_enclosed_ours(halo_mass, r_wells / r_scale )
+        M_encs_scaled = M_encs  / (4.0 * np.pi self.OmM * critical_density * single_rs ** 2.0 * self.nfw_unitless_oveR_int(concentration))
 
-        M_enc = self.point_mass_enclosed(halo_mass)
+        deltas_over_rsqr_int_over_rsqr = - M_encs_scaled
+
+        return deltas_over_rsqr_int_over_rsqr
+
+    #Mass should be in M_sun X 10 ^(12) ; returns r ** 2.0 * int(delta r*2 4 pi dr) in units of Mpc
+    # delta_portion_funct_ours(single_z, central_z, halo_density, r_scale, b_impact, overdensity)
+    def delta_portion_funct_point_mass(self, single_zs, central_z, angular_offsets, halo_mass ):
+        single_rs = self.r_of_z_interp(single_zs) #Units in Mpc
+        central_r = self.r_of_z_interp(central_z)
+        critical_density = self.crit_density(central_z) #units of GMsun / Mpc ^ 3
+        r_wells = self.r_well_from_geometry(single_rs, central_r, angular_offsets)
+        M_enc = halo_mass
         M_enc_scaled = M_enc / (self.OmM * critical_density)
-
-        delta_over_rsqr_int_over_rsqr = - 1.0 / (4.0 * np.pi * r_well ** 2.0) * M_enc_scaled
+        delta_over_rsqr_int_over_rsqr =  1.0 / (4.0 * np.pi * r_wells ** 2.0) * M_enc_scaled
 
         return delta_over_rsqr_int_over_rsqr
 
@@ -520,11 +544,21 @@ class PanStarsFieldManager:
         return los_velocity_field
 
 
+    def getHaloMassFromVariedParam(self, halo_mass_power):
+        halo_mass = np.sign(halo_mass_power) * (10.0 ** abs(halo_mass_power) - 1.0) #Allow the sampling to go from -whatever to + whatever, passing through 0 when halo_mass_power = 0
+        return halo_mass
+
     #parameters are the mass in one scale radius, the scale radius, the central z, and angles describing the impact parameter
     #def getLOSVelocityFieldAlongLOSOurs(self, zs, RAs, Decs, field_center, central_z, halo_scaling_power, comoving_scale_radius_power, central_sky_phi, central_sky_theta, ):
-    def getLOSVelocityFieldAlongLOSOurs(self, zs, RAs, Decs, field_center, central_z, halo_mass_power, central_sky_RA_offset, central_sky_Dec_offset, ):
-        #For now, we are going to see what happens when we limit our model to just having the halo_scaling_power adjust the halo nature -- basically making it a point mass
-        comoving_scale_radius_power = self.fixed_comoving_scale_radius_power
+    def getLOSVelocityFieldAlongLOSNFWOurs(self, zs, RAs, Decs, field_center, central_z, halo_mass_power, comoving_scale_radius_power, central_sky_RA_offset, central_sky_Dec_offset, ):
+        """
+        For a set of sky coordinates in 3 space (redshift, angles on sky), determine
+           there line of sight (los) peculiar velocities induced by an NFW DM halo
+           over/under density (negative masses are underdensities).
+        We rotate the spherical coordinates to be centered on some central
+            coordinates, central_sky_RA_offset, central_sky_Dec_offset.
+        """
+        #comoving_scale_radius_power = self.fixed_comoving_scale_radius_power
         deg_to_rad = self.astro_arch.getDegToRad()
         field_RA, field_Dec = field_center
         #central_RA, central_Dec = [field_RA + np.sin(central_sky_phi * deg_to_rad) * central_sky_theta * np.cos(field_Dec * deg_to_rad), field_Dec + np.cos(central_sky_phi * deg_to_rad) * central_sky_theta]
@@ -539,7 +573,7 @@ class PanStarsFieldManager:
         #critical_densities = np.array([self.crit_density(single_z) for single_z in zs])
         critical_density = self.crit_density(central_z)
         r_scale = 10.0 ** comoving_scale_radius_power #scale radius in Mpc
-        halo_mass = np.sign(halo_mass_power) * (10.0 ** abs(halo_mass_power) - 1.0) #Allow the sampling to go from -whatever to + whatever, passing through 0 when halo_mass_power = 0
+        halo_mass = self.getHaloMassFromVariedParam(halo_mass_power)
         #vel_at_scale_radius = np.sign(vel_at_scale_radius_power) * (10.0 ** (-abs(vel_at_scale_radius_power) - 1.0)
         #rolled_v_scale_power = np.where(vel_at_scale_radius_power > self.min_v_scale_power, vel_at_scale_radius_power, -vel_at_scale_radius_power + 2.0 * self.min_v_scale_power) #Rolls over to correspond to negative velocities at the minimium allowed power
         #vel_at_scale_radius = np.where(vel_at_scale_radius_power > self.min_v_scale_power, 1.0, -1.0) * (10.0 ** rolled_v_scale_power  - 10.0 ** self.min_v_scale_power) #self.max_v_scale_power is the given power at which the velocity at z = 0 is c
@@ -550,12 +584,12 @@ class PanStarsFieldManager:
         angular_offsets = np.array([can.measureAngularSeparationOnSky([RAs[i], Decs[i]], [central_RA, central_Dec], return_radian = 1) for i in range(len(zs))])
 
         #r_offsets = np.sqrt(single_rs ** 2.0 + central_r ** 2.0 - 2.0 * single_rs * central_r * np.cos(angular_offsets * deg_to_rad))
-        r_incidences = np.sin(angular_offsets) * central_r
+        #r_incidences = np.sin(angular_offsets / 2.0) * central_r * 2.0
         #print ('angular_offsets.tolist() = ' + str(angular_offsets.tolist()))
         #print ('r_incidences.tolist() = ' + str(r_incidences.tolist()))
-        coses_of_los_angle = self.cos_of_infall_angle_relative_to_los(single_rs, central_r, r_incidences)
+        coses_of_los_angle = self.cos_of_infall_angle_relative_to_los(single_rs, central_r, angular_offsets)
         #print ('[zs, central_z, halo_scaling, r_scale, r_incidences] = ' + str([zs, central_z, halo_scaling, r_scale, r_incidences] ))
-        delta_portions = np.array([self.delta_portion_funct_ours(zs[i], central_z, halo_mass, r_scale, r_incidences[i]) for i in range(len(zs))]) #in units of Mpc
+        delta_portions = self.delta_portion_funct_NFW_ours(zs, central_z, halo_mass, r_scale, angular_offsets) #in units of Mpc
 
         speedol = self.astro_arch.getc()
         #self.H0 / speedol gives H0 / c in units of 1/MPC
@@ -566,6 +600,40 @@ class PanStarsFieldManager:
         los_velocity_field = self.H0 / speedol * np.array(Hs_of_z) * np.array(d_zs_D_over_D) * delta_portions
         #print ('los_velocity_field = ' + str(los_velocity_field))
 
+        return los_velocity_field, coses_of_los_angle
+
+
+    #parameters are the point mass in 10^XX M_sun, the central z, and angles describing the impact parameter
+    def getLOSVelocityFieldAlongLOSPointMass(self, zs, RAs, Decs, field_center, central_z, halo_mass_power, central_sky_RA_offset, central_sky_Dec_offset, ):
+        """
+        For a set of sky coordinates in 3 space (redshift, angles on sky), determine
+           there line of sight (los) peculiar velocities induced by a point mass
+           over/under density (negative masses are underdensities).
+        We rotate the spherical coordinates to be centered on some central
+            coordinates, central_sky_RA_offset, central_sky_Dec_offset.
+        """
+        comoving_scale_radius_power = self.fixed_comoving_scale_radius_power
+        deg_to_rad = self.astro_arch.getDegToRad()
+        field_RA, field_Dec = field_center
+        #central_RA, central_Dec = [field_RA + np.sin(central_sky_phi * deg_to_rad) * central_sky_theta * np.cos(field_Dec * deg_to_rad), field_Dec + np.cos(central_sky_phi * deg_to_rad) * central_sky_theta]
+        central_RA, central_Dec = [field_RA + central_sky_RA_offset, field_Dec + central_sky_Dec_offset]
+        Hs_of_z = [self.H_of_z(single_z) for single_z in zs]
+        d_zs_D_over_D = [self.d_z_D_growth_over_D(single_z) for single_z in zs]
+        #Relationship between comoving radial distance and redshift is determined by cosmology.
+        single_rs = np.array([self.r_of_z_interp(single_z) for single_z in zs])
+        central_r = self.r_of_z_interp(central_z)
+        critical_density = self.crit_density(central_z)
+        #r_scale = 10.0 ** comoving_scale_radius_power #scale radius in Mpc
+        halo_mass = self.getHaloMassFromVariedParam(halo_mass_power)
+        angular_offsets = np.array([can.measureAngularSeparationOnSky([RAs[i], Decs[i]], [central_RA, central_Dec], return_radian = 1) for i in range(len(zs))])
+        #r_incidences = np.sin(angular_offsets / 2.0) * central_r * 2.0
+        #r_seps = self.r_well_from_geometry(single_rs, central_r, angular_offsets)
+        coses_of_los_angle = self.cos_of_infall_angle_relative_to_los(single_rs, central_r, angular_offsets)
+        delta_portions = self.delta_portion_funct_point_mass(zs, central_z, angular_offsets, halo_mass) #in units of Mpc
+
+        speedol = self.astro_arch.getc()
+        #self.H0 / speedol gives H0 / c in units of 1/MPC
+        los_velocity_field = self.H0 / speedol * np.array(Hs_of_z) * np.array(d_zs_D_over_D) * delta_portions
         return los_velocity_field, coses_of_los_angle
 
     #Here
@@ -616,6 +684,23 @@ class PanStarsFieldManager:
         fit_funct = self.getMuDiffOfVelocityField
         return [fit_funct, n_vel_fit_params, vel_bounds, [fit_central_zs, fit_central_zs, fit_M_overdensities, fit_concentrations]]
 
+    def getFittingFunctVelPointMass(self, seed_z_step = 0.01, n_seeds_around_sky = 4):
+        n_vel_fit_params = 4
+        #Note: for mass scaling (second) parameter, the number is logarithmic
+        #BOUNDS ARE: offsets from centered z, logarithm of mass, relative to 10 ^ 15 solar masses,
+        #            offsets from object position on sky, in degrees
+        vel_bounds = [[0.322, 0.333], (0.0, 2.0), (-5.0, 5.0), (-5.0, 5.0)]
+        mcmc_step_sizes = [0.005, 0.1, 0.05, 0.05]
+        sub_funct = self.getLOSVelocityFieldAlongLOSPointMass
+        muDiff_of_z_funct = self.getMuDiffOfVelocityField
+        MCMC_chain_starts  = []
+        seed_zs = np.arange(*vel_bounds[0], seed_z_step)
+        for seed_z in seed_zs:
+            MCMC_chain_starts = MCMC_chain_starts + [[seed_z, 0.0, 0.0, 0.0]] #Put one seed at the center of the field
+            for j in range(n_seeds_around_sky):
+                MCMC_chain_starts = MCMC_chain_starts  + [[seed_z, 0.0 * np.log10(2.0), np.cos(2.0 * np.pi / n_seeds_around_sky * (0.5 + j)) * 1.0, np.sin(2.0 * np.pi / n_seeds_around_sky * (0.5 + j)) * 1.0]]
+        return [sub_funct, muDiff_of_z_funct, n_vel_fit_params, vel_bounds, MCMC_chain_starts, mcmc_step_sizes]
+
     #def getFittingFunctVelNFWOurs(self, n_seeds_in_z = 50, n_seeds_around_sky = 4):
     def getFittingFunctVelNFWOurs(self, seed_z_step = 0.01, n_seeds_around_sky = 4):
         n_vel_fit_params = 4
@@ -623,7 +708,7 @@ class PanStarsFieldManager:
         #vel_bounds = [(0.0, 1.0), (0.0, 10.0), (0.5, 4.0), (0.0, 360.0), (0.01, 10.0)]
         #vel_bounds = [(0.0, 1.0), (0.0, 5.0), (0.0, 360.0), (0.01, 10.0)]
         #BOUNDS ARE: offsets from centered z, logarithm of mass, relative to 10 ^ 15 solar masses,
-        #            offsets from object position on sky, in degrees
+        #            scale radius, relative to XXXMpc, offsets from object position on sky, in degrees
         #vel_bounds = [(-0.10, 0.10), (-3.0, 3.0), (-20.0, 20.0), (-20.0, 20.0)]
         #vel_bounds = [[0.01, self.z_range[1]], (0.0, 2.0), (-5.0, 5.0), (-5.0, 5.0)]
         vel_bounds = [[0.322, 0.333], (0.0, 2.0), (-5.0, 5.0), (-5.0, 5.0)]
@@ -634,7 +719,7 @@ class PanStarsFieldManager:
         #fit_overdensities = [200]
         #mcmc_step_sizes = [0.005, 0.02, 0.015, 2.0, 0.05]
         mcmc_step_sizes = [0.005, 0.1, 0.05, 0.05]
-        sub_funct = self.getLOSVelocityFieldAlongLOSOurs
+        sub_funct = self.getLOSVelocityFieldAlongLOSNFWOurs
         muDiff_of_z_funct = self.getMuDiffOfVelocityField
         MCMC_chain_starts  = []
         seed_zs = np.arange(*vel_bounds[0], seed_z_step)
@@ -649,16 +734,15 @@ class PanStarsFieldManager:
     def computeRChiSqr(self, all_zs, all_RAs, all_Decs, all_resids, all_errs, field_center, n_model_params, fit_params, print_params = 0):
         fitted_resids = self.muDiff_of_z_funct(all_zs, all_RAs, all_Decs, all_zs, all_RAs, all_Decs, all_resids, all_errs, field_center, fit_params, self.fit_funct)
         #print ('fit_params = ' + str(fit_params))
-        #print ('fitted_resids.tolist() = ' + str(fitted_resids.tolist()))
         #weights = np.array(all_errs) ** (-2.0)
         #weighted_mean_diff = np.sum(np.array(fitted_resids - all_resids)  * weights) / np.sum(weights)
         #weighted_mean_diff = 0.0
         #print ('fit_params = ' + str(fit_params))
-        #print('fitted_resids.tolist() = ' + str(fitted_resids.tolist()))
+        #print('fitted_resids = ' + str(fitted_resids))
         total_dof = len(all_zs) - n_model_params
-        chi_sqr = np.sum(((np.array(fitted_resids)) - all_resids) ** 2.0 / (np.array(all_errs) ** 2.0))
+        chi_sqr = np.sum(((np.array(fitted_resids)) - np.array(all_resids)) ** 2.0 / (np.array(all_errs) ** 2.0))
         r_chi_sqr = chi_sqr / total_dof
-        if print_params: print ('np.array(fit_params).tolist() + [r_chi_sqr] = ' + str(np.array(fit_params).tolist()+ [r_chi_sqr]))
+        #if print_params: print ('np.array(fit_params).tolist() + [r_chi_sqr] = ' + str(np.array(fit_params).tolist()+ [r_chi_sqr]))
         return r_chi_sqr
 
     def getSDSSGalDensity(self, fit_params, field_center, comoving_sample_rad, bg_comoving_annulus_inner_rad, bg_comoving_annulus_outer_rad):
@@ -713,7 +797,7 @@ class PanStarsFieldManager:
         x=-x    # reverse the scale: East to the left
         return x
 
-    def makeSkyPlotOfSNe(self, sky_plot):
+    def makeSkyPlotOfSNe(self, sky_plot ):
         sn_by_survey = self.sn_by_survey
         sky_plot.grid(True)
         sky_plot.set_xlabel('R.A.')
@@ -1171,6 +1255,21 @@ class PanStarsFieldManager:
          print ('local_bounds = ' + str(local_bounds))
          return local_bounds
 
+    def doOneDFitOnSNeSubset(self, central_coord, nearby_sn_indeces,
+                             method = 'Nelder-Mead', bounds = None):
+        if bounds == None:
+            bounds = self.bounds[1]
+        fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, fitting_surveys = [[arr[i] for i in nearby_sn_indeces] for arr in [self.all_zs, self.all_RAs, self.all_Decs, self.all_muResids, self.all_mu_errs, self.all_surveys]]
+        RA_offset_to_center = (180.0 - central_coord[1])
+        fitting_RAs = self.centerRAs(fitting_RAs,  RA_offset_to_center )
+        central_RA, central_Dec = [self.centerRAs([central_coord[1]],  RA_offset_to_center )[0],  central_coord[2]]
+        fit_funct_no_gal_dens = lambda M: -self.overall_log_prob_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], [central_coord[0], M, 0.0, 0.0], print_params = 0, gal_dens_weight = 0.0)
+
+        min_res = optimize.minimize_scalar(fit_funct_no_gal_dens, bounds = bounds)
+        fitted_resids = self.muDiff_of_z_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], [central_coord[0], min_res['x'], 0.0, 0.0], self.fit_funct)
+        null_fit_val = fit_funct_no_gal_dens(0.0)
+        return min_res, null_fit_val
+
     def doFitOnSNeSubset(self, central_coord, nearby_sn_indeces,
                          method = 'Nelder-Mead', n_mcmc_chains = 8, n_mcmc_steps = 2000, mcmc_seed_rand_scalings = [0.01, 1.0, 1.0, 1.0], comoving_bound = None):
         local_bounds = self.getBoundsGivingMaxComovingRange(comoving_bound, central_coord, self.bounds)
@@ -1185,7 +1284,6 @@ class PanStarsFieldManager:
         #RA_center, Dec_center = [central_coord[1], central_coord[2]]
         start_min_seed = [central_coord[0], 0.0, 0.0, 0.0]
         central_RA, central_Dec = [self.centerRAs([central_coord[1]],  RA_offset_to_center )[0],  central_coord[2]]
-
 
         fit_funct_no_gal_dens = lambda ext_params: -self.overall_log_prob_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], ext_params, print_params = 0, gal_dens_weight = 0.0)
         #mcmc_log_prob_funct = lambda params: fit_funct_no_gal_dens(params) + self.mcmc_prior_funct([params[0] - start_min_seed[0] if params[0] > 0.0 else -np.inf ] + list(params[1:]), print_params = 0)
@@ -1343,10 +1441,57 @@ class PanStarsFieldManager:
         comoving_sep = self.computeComovingSepsOfCoords(center_coord, ref_coord)
         return comoving_sep
 
-    def doSingleFitAroundCoord(self, seed_redshift, shell_coord, comoving_bin, min_n_sn, comoving_bound = None, method = 'SLSQP'):
-        comoving_dists = [ self.determineComovingSep([seed_redshift] + shell_coord, [self.all_zs[i], self.all_RAs[i], self.all_Decs[i]], min_sep = comoving_bin)
+    def determineComovingGrid(self, comoving_grid_sep_Mpc = 100, z_lims = None):
+        """
+        Make a cartesian grid of points in comoving space, returning those that lie within a spherical
+            annulus of minimum/maximum redshift radius.
+        Returned in spherical (z, RA, Dec) coords.
+        """
+        if z_lims == None:
+            z_lims = self.z_range
+        r_lims = [self.r_of_z_interp(z_lims[0]), self.r_of_z_interp(z_lims[1])]
+        one_d_comoving_axis = np.arange(r_lims[0] + comoving_grid_sep_Mpc / 2, r_lims[1], comoving_grid_sep_Mpc )
+        one_d_comoving_axis = can.niceReverse((-one_d_comoving_axis).tolist()) + one_d_comoving_axis.tolist()
+        cartesian_points = can.flattenListOfLists(can.flattenListOfLists([[[[x,y,z] for x in one_d_comoving_axis] for y in one_d_comoving_axis] for z in one_d_comoving_axis]))
+        cartesian_points = [point for point in cartesian_points if (point[0] ** 2.0 + point[1] ** 2.0 + point[2] ** 2.0 > r_lims[0] ** 2.0) and (point[0] ** 2.0 + point[1] ** 2.0 + point[2] ** 2.0 < r_lims[1] ** 2.0)]
+        rs = [(np.sqrt(point[0] ** 2.0 + point[1] ** 2.0 + point[2] ** 2.0)) for point in cartesian_points]
+        xs, ys, zs_cart = [[point[0] for point in cartesian_points], [point[1] for point in cartesian_points], [point[2] for point in cartesian_points]]
+        Rs = [(np.sqrt(point[0] ** 2.0 + point[1] ** 2.0)) for point in cartesian_points]
+        thetas = [math.atan2(Rs[i], zs_cart[i]) for i in range(len(Rs))]
+        phis = [math.atan2(xs[i], ys[i]) for i in range(len(Rs))]
+        phis = [-phi + np.pi if phi < 0.0 else phi for phi in phis]
+        spherical_coords = [[float(self.z_of_r_interp(rs[i])), 360.0 - phis[i] / self.astro_arch.getDegToRad(), 90.0 - thetas[i] / self.astro_arch.getDegToRad()] for i in range(len(cartesian_points))]
+
+        return spherical_coords
+
+    def getSNWithinComovingDistance(self, redshift, sky_coord, max_comoving_dist):
+        comoving_dists = [ self.determineComovingSep([redshift] + sky_coord, [self.all_zs[i], self.all_RAs[i], self.all_Decs[i]], min_sep = max_comoving_dist)
                               for i in range(len(self.all_sns)) ]
-        nearby_sn_indeces = [ i for i in range(len(comoving_dists)) if comoving_dists[i] < comoving_bin ]
+        nearby_sn_indeces = [ i for i in range(len(comoving_dists)) if comoving_dists[i] < max_comoving_dist ]
+        return nearby_sn_indeces
+
+    def doSingleOneDFitAroundCoord(self, seed_redshift, shell_coord, comoving_bin, min_n_sn, comoving_bound = None, method = 'SLSQP'):
+        nearby_sn_indeces = self.getSNWithinComovingDistance(seed_redshift, shell_coord, comoving_bin)
+        if len(nearby_sn_indeces) >= min_n_sn:
+            print ( 'Within ' + str(comoving_bin) + ' Mpc of the coordinate: ' + str([seed_redshift] + shell_coord) + ', we have the following ' + str(len(nearby_sn_indeces)) + ' sn ' + str(nearby_sn_indeces) )
+
+            fit_around_coord, null_prob = self.doOneDFitOnSNeSubset([seed_redshift] + shell_coord, nearby_sn_indeces, )
+            #return fit_around_coord
+            fit_param, fit_prob = [fit_around_coord['x'], fit_around_coord['fun']]
+            #fit_bounds = self.getBoundsGivingMaxComovingRange(comoving_bound, [seed_redshift] + shell_coord, self.bounds)
+            prob_improvement = self.computeProbImprovement( -fit_prob , -null_prob)
+            #print ('At [z, RA, Dec] = ' + str([seed_redshift] + shell_coord) + ', best fit mass is ' + str(fit_param) + ' prob improvement was: = ' + str(prob_improvement))
+            #fitted_plots = self.plotSNeFitOnSNeSubset([seed_redshift, fit_param, 0.0, 0.0], nearby_sn_indeces, [seed_redshift] + shell_coord,
+            #                         fit_bounds = fit_bounds, full_title = 'Best fit params: ' + str([can.round_to_n(param, 3) for param in fit_params]) +  '; prob ' + str(can.round_to_n(prob_improvement, 3))  + ' times more likely than null',
+            #                         save_name = 'SingleFieldFit_z' + str(can.round_to_n(seed_redshift, 3)) + '_RA' + str(can.round_to_n(shell_coord[0], 4)) + '_RA' + str(can.round_to_n(shell_coord[1], 4)) +  '_ComovRadius' + str(comoving_bin) + '.pdf' )
+            return [fit_param, prob_improvement]
+        else:
+            print ('For [z, RA, Dec] = ' + str([seed_redshift] + shell_coord) + ', there are ' + str(len(nearby_sn_indeces)) + ' < min N SN ' + str(min_n_sn) + ' within ' + str(comoving_bin) + ' Mpc ')
+            return None
+
+
+    def doSingleFitAroundCoord(self, seed_redshift, shell_coord, comoving_bin, min_n_sn, comoving_bound = None, method = 'SLSQP'):
+        nearby_sn_indeces = self.getSNWithinComovingDistance(seed_redshift, shell_coord, comoving_bin)
         if len(nearby_sn_indeces) >= min_n_sn:
             print ( 'Within ' + str(comoving_bin) + 'Mpc of the coordinate: ' + str([seed_redshift] + shell_coord) + ', we have the following ' + str(len(nearby_sn_indeces)) + ' sn ' + str(nearby_sn_indeces) )
 
@@ -1451,8 +1596,8 @@ class PanStarsFieldManager:
                 sky_sect_axis, redshift_sect_axis = [axarr_fits[row_index, col_index], axarr_fits[row_index, col_index + 1]]
                 good_fit = good_fits_to_plot[i]
                 center_z, center_RA, center_Dec = [float(good_fit[0]), float(good_fit[1]), float(good_fit[2])]
-                comoving_dists = [ self.determineComovingSep([center_z, center_RA, center_Dec], [self.all_zs[j], self.all_RAs[j], self.all_Decs[j]], min_sep = comoving_bin) for j in range(len(self.all_sns)) ]
-                nearby_sn_indeces = [ j for j in range(len(comoving_dists)) if comoving_dists[j] < comoving_bin ]
+
+                nearby_sn_indeces = self.getSNWithinComovingDistance(center_z, [center_RA, center_Dec], comoving_bin)
                 plotted_surveys = [self.all_surveys[j] for j in nearby_sn_indeces]
                 nearby_RAs, nearby_Decs, nearby_zs = [ [self.all_RAs[j] for j in nearby_sn_indeces], [self.all_Decs[j] for j in nearby_sn_indeces], [self.all_zs[j] for j in nearby_sn_indeces] ]
                 good_fit_params = can.recursiveStrToListOfLists(good_fit[3], elem_type_cast = float)
@@ -1742,13 +1887,162 @@ class PanStarsFieldManager:
         comoving_sep = self.computeComovingSepsOfCoords([zs[0], RAs[0], Decs[0]], [zs[1], RAs[1], Decs[1]])
         return comoving_sep
 
+    def doOneDFitsOnGrid(self, fit_comoving_density, comoving_bin, min_n_sn, z_range = None):
+        """
+        Do a fit in one dimension (over/under density mass) at a grid of points
+            in comoving space.  The three passable paramters are: the density with
+            which seed points are seeded in comoving space (fit_comoving_density),
+            the size of the comoving sphere around each point to include SNe in
+            the fit (comoving_bin), and the minimum number of SNe in the comoving
+            bin to make a fit worth running (min_n_sn).
+        The fits done at each grid location are performed only if some minimum
+            number of SNe are sufficiently close to that seed location.
+        """
+        spherical_points = field_plotter.determineComovingGrid(comoving_grid_sep_Mpc = fit_comoving_density, z_lims = z_range)
+        fits = [None for i in spherical_points]
+        prev_time = time.time()
+        for i in range(len(spherical_points)):
+            spherical_point = spherical_points[i]
+            fits[i] = field_plotter.doSingleOneDFitAroundCoord(spherical_point[0], spherical_point[1:], comoving_bin, min_n_sn)
+            curr_time = time.time()
+            if i % 1000 == 1000 - 1:
+                print ('!!! We are ' + str(can.round_to_n(i / len(spherical_points) * 100, 5)) + '% done.  Approximately ' + str((curr_time - prev_time) * can.round_to_n((len(spherical_points) - i) / 1000, 5)) + 's to go.')
+                prev_time = curr_time
+        return [spherical_points, fits]
+
+    def makePlotOfOneDFits(self, fitted_points_spher_coords, fits, fig_size_unit = 0.5, n_fits_x = 6, n_fits_y = 2,
+                           legend_fontsize = 7, ticksize = 8, labelsize = 10,
+                           save_plot_prefix = '', threeD_plot_suffix = '_FitsIn3Sky.pdf', gridspec_density_plot_suffix = '_BestDensityFits.pdf', hist_of_fits = '_HistOfFitImprovements.pdf'):
+        """
+        Take a series of fits run on a comoving grid in 3D and show the best
+            n_good_fits_to_show of those fits.  In the center of these plots,
+            we show the distribution of SNe on the sky.
+        """
+        dir_archive = DirectoryArchive()
+        plot_dir = dir_archive.getPlotDirectory()
+        print ('fits = ' + str(fits))
+        good_indeces  = [i for i in range(len(fitted_points_spher_coords)) if fits[i] != None]
+        print ('good_indeces = ' + str(good_indeces))
+        fitted_points = [fitted_points_spher_coords[i] for i in good_indeces]
+        fitted_masses = [fits[i][0] for i in good_indeces]
+        fitted_improvements = [fits[i][1] for i in good_indeces]
+        ordered_points, ordered_masses, ordered_improvements = can.safeSortOneListByAnother(fitted_improvements, [fitted_points, fitted_masses, fitted_improvements])
+        ordered_points = can.niceReverse(ordered_points)
+        ordered_masses = can.niceReverse(ordered_masses)
+        ordered_improvements = can.niceReverse(ordered_improvements)
+        print ('ordered_points = ' + str(ordered_points))
+        nearby_sn_indeces = [self.getSNWithinComovingDistance(ordered_points[i][0], ordered_points[i][1:], comoving_bin) for i in range(len(ordered_points))]
+        print ('ordered_points = ' + str(ordered_points))
+        print ('ordered_masses = ' + str(ordered_masses))
+        print ('ordered_improvements = ' + str(ordered_improvements))
+        deg_to_rad = self.astro_arch.getDegToRad()
+        cart_points = [point[0] * np.array([np.cos(point[1] * deg_to_rad ) * np.sin((90.0 - point[2]) * deg_to_rad ), np.sin(point[1] * deg_to_rad ) * np.sin((90.0 - point[2]) * deg_to_rad ), np.cos((90.0 - point[2]) * deg_to_rad ) ]) for point in ordered_points]
+        xs_cart, ys_cart, zs_cart = [[point[0] for point in cart_points], [point[1] for point in cart_points], [point[2] for point in cart_points] ]
+
+
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        ax.scatter(xs_cart, ys_cart, zs_cart, c = np.log(ordered_improvements))
+        plt.tight_layout()
+        plt.savefig(plot_dir + save_plot_prefix + threeD_plot_suffix)
+        plt.close('all')
+
+        max_n_good_fits_to_show = n_fits_x * (n_fits_y - 1) + 2
+        figsize = ( n_fits_x * fig_size_unit , n_fits_y * 2 * fig_size_unit)
+        fig = plt.figure(constrained_layout=True, figsize = figsize)
+        gs = fig.add_gridspec(n_fits_y * 2 * 2 + 1, n_fits_x * 2)
+        gs_indeces_for_single_fits = [ [ [[(i // n_fits_x) * 4, (i // n_fits_x) * 4 + 1], [(i % n_fits_x) * 2, (i % n_fits_x) * 2 + 1]],
+                                         [[(i // n_fits_x) * 4 + 2, (i // n_fits_x) * 4 + 2 + 1], [(i % n_fits_x) * 2, (i % n_fits_x) * 2 + 1]] ]
+                                        for i in range(max_n_good_fits_to_show - 2)]
+        gs_indeces_for_single_fits = gs_indeces_for_single_fits + [ [[[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 1, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 1 + 1] ,[0, 1]], [[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 1, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 1 + 1] ,[0, 1]]],
+                                                                    [[[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 1, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 1 + 1] ,[ (n_fits_x - 1) * 2, (n_fits_x - 1) * 2 + 1]], [[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 1, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 1 + 1] ,[(n_fits_x - 1) * 2, (n_fits_x - 1) * 2 + 1]] ] ]
+
+        #f, axarr = plt.subplots(2, max_n_good_fits_to_show, figsize = )
+        #axarr[0,0].set_ylabel(r'$\Delta \mu$ (mag)')
+        #axarr[1,0].set_ylabel(r'Dec (deg)')
+        #max_n_good_fits_to_show = 7
+        print ('gs_indeces_for_single_fits = '  +str(gs_indeces_for_single_fits))
+        for i in range(min(len(nearby_sn_indeces), max_n_good_fits_to_show, len(gs_indeces_for_single_fits))):
+            gs_indeces = gs_indeces_for_single_fits[i]
+            print ('gs_indeces = ' + str(gs_indeces))
+            ax0 = fig.add_subplot(gs[gs_indeces[0][0][0]:gs_indeces[0][0][1] + 1, gs_indeces[0][1][0]:gs_indeces[0][1][1] + 1])
+            ax1 = fig.add_subplot(gs[gs_indeces[1][0][0]:gs_indeces[1][0][1] + 1, gs_indeces[1][1][0]:gs_indeces[1][1][1] + 1])
+            fitting_coord = ordered_points[i]
+            fitted_mass_power = ordered_masses[i]
+            improvement = ordered_improvements[i]
+            fitted_mass = self.getHaloMassFromVariedParam(fitted_mass_power)
+            sn_indeces_to_plot = nearby_sn_indeces[i]
+            zs_to_plot = [self.all_zs[index] for index in sn_indeces_to_plot]
+            muResids_to_plot = [self.all_muResids[index] for index in sn_indeces_to_plot]
+            mu_errs_to_plot = [self.all_mu_errs[index] for index in sn_indeces_to_plot]
+            RAs_to_plot = [self.all_RAs[index] for index in sn_indeces_to_plot]
+            Decs_to_plot = [self.all_Decs[index] for index in sn_indeces_to_plot]
+            surveys_to_plot = [self.all_surveys[index] for index in sn_indeces_to_plot]
+            colors_to_plot = [self.survey_to_color_dict[survey] for survey in surveys_to_plot]
+            RA_offset_to_center = (180.0 - fitting_coord[1])
+            RAs_for_resids = self.centerRAs(RAs_to_plot, RA_offset_to_center)
+            central_RA, central_Dec = [self.centerRAs([fitting_coord[1]],  RA_offset_to_center )[0],  fitting_coord[2]]
+            fitted_resids = self.muDiff_of_z_funct(zs_to_plot, RAs_for_resids, Decs_to_plot, zs_to_plot, RAs_to_plot, Decs_to_plot, muResids_to_plot, mu_errs_to_plot, [central_RA, central_Dec], [fitting_coord[0], fitted_mass_power, 0.0, 0.0], field_plotter.fit_funct)
+            null_resids = self.muDiff_of_z_funct(zs_to_plot, RAs_for_resids, Decs_to_plot, zs_to_plot, RAs_to_plot, Decs_to_plot, muResids_to_plot, mu_errs_to_plot, [central_RA, central_Dec], [fitting_coord[0], 0.0, 0.0, 0.0], field_plotter.fit_funct)
+
+            ax0.scatter(zs_to_plot, muResids_to_plot, c = colors_to_plot, marker = 'o')
+            print ('!!! fitted_resids = ' )
+            print (fitted_resids)
+            ax0.scatter(zs_to_plot, fitted_resids, c = 'k', marker = 'x')
+            #ax0.scatter(zs_to_plot, null_resids, c = 'r', marker = 'x')
+            [ ax0.annotate(str(j + 1), (zs_to_plot[j], muResids_to_plot[j]), color = 'k', fontsize = ticksize ) for j in range(len(sn_indeces_to_plot)) ]
+            ax0.errorbar(zs_to_plot, muResids_to_plot, yerr = mu_errs_to_plot, colors = colors_to_plot, fmt = 'none', ecolor = colors_to_plot)
+            ax0.axvline(ordered_points[i][0], color = 'k', linestyle = '--')
+            ax1.scatter(RAs_to_plot, Decs_to_plot, c = colors_to_plot, marker = 'o')
+            [ ax1.annotate(str(j + 1), (RAs_to_plot[j], Decs_to_plot[j]), color = 'k', fontsize = ticksize) for j in range(len(sn_indeces_to_plot)) ]
+            ax1.scatter(fitting_coord[1], fitting_coord[2], c = 'k', marker = 'x', s = 10 )
+            ax0.set_xlabel(r'$z$', fontsize = labelsize)
+            ax1.set_xlabel(r'RA (deg)', fontsize = labelsize)
+            ax0.set_ylabel(r'$\Delta \mu$ (mag)', fontsize = labelsize)
+            ax1.set_ylabel(r'Dec (deg)', fontsize = labelsize)
+            ax0.tick_params(axis='both', labelsize= ticksize)
+            ax1.tick_params(axis='both', labelsize= ticksize)
+            ax0.text(0.05, 0.95, 'fit ' + str(can.round_to_n(improvement, 3)) + 'X better' + '\n' +  'M=' + str(can.round_to_n(fitted_mass, 3)) + r' T$M_{\odot}$', fontsize = labelsize, transform = ax0.transAxes, verticalalignment = 'top', horizontalalignment = 'left')
+
+
+            #ax0.text(0.5, 0.5, str(gs_indeces[0]))
+            #ax1.text(0.5, 0.5, str(gs_indeces[1]))
+        legend_gs_indeces = [(n_fits_y - 1) * 4, [2,-2]]
+        print ('legend_gs_indeces = ' + str(legend_gs_indeces))
+        sky_gs_indeces = [[(n_fits_y - 1) * 4 + 1, (n_fits_y - 1) * 4 + 5], [2,-2]]
+        print ('sky_gs_indeces = ' + str(sky_gs_indeces))
+
+        sky_ax = fig.add_subplot(gs[sky_gs_indeces[0][0]:sky_gs_indeces[0][1], sky_gs_indeces[1][0]:sky_gs_indeces[1][1]], projection="aitoff")
+        plots_for_legend = self.makeSkyPlotOfSNe(sky_ax)
+        #sky_ax.text(0.5, 0.5, 'sky GOES HERE' )
+        legend_ax = fig.add_subplot(gs[legend_gs_indeces[0], legend_gs_indeces[1][0]:legend_gs_indeces[1][1]])
+        legend_ax.legend(plots_for_legend, self.included_surveys, ncol = 7, fontsize = legend_fontsize)
+        legend_ax.set_xticks([])
+        legend_ax.set_yticks([])
+        #legend_ax.text(0.5, 0.5, 'LEGEND GOES HERE' )
+        plt.tight_layout()
+        plt.savefig(plot_dir + save_plot_prefix + gridspec_density_plot_suffix)
+        #plt.show()
+        plt.close('all')
+
+        plt.hist(np.log10(ordered_improvements), bins = 20)
+        plt.xlabel('Improvement over null fit')
+        plt.ylabel(r'Log10($N$)')
+        print ('And.... go! ')
+        plt.savefig(plot_dir + save_plot_prefix + hist_of_fits)
+
+        print ('And.... done! ')
+
+        return 1
+
+
     def __init__(self, data_set,
                       randomize_each_survey = 0, randomize_each_field = 0, n_z_bins = 10,
                       zHD = 1, OmM = 0.3, OmL = 0.7, Om0 = 1.0, OmR = 0.0, H0 = 70.0, do_cosmic_fit = 0,
                       archive_healpix_sides = 32, annulus_inner_comoving_rad_scaling = 1.0, annulus_outer_comoving_rad_scaling = 2.0, gal_dens_weighting = 0.5,
                       full_sdss_gal_data_file = 'SDSS_PSSuperField3_SDSSGals_Allpz.csv', preloaded_sdss_gals = None, start_spherical_comoving_rad_frac = 0.03,
                       interp_z_params = [0.0, 100.0, 1001], z_range = [-0.1, 3.0], pull_extinctions = 0, surveys_to_include = ['all'], surveys_to_ignore = [],
-                      n_mcmc_steps = 1000, archive_to_use = 'ps1md', resid_fitting_funct = 'redshift_from_vel', min_v_scale_power = -5,
+                      n_mcmc_steps = 1000, archive_to_use = 'ps1md', resid_fitting_funct = 'redshift_from_vel_nfw', min_v_scale_power = -5,
                       plot_save_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/SNIsotropyProject/plots/singleSNOverUnderDenseFits/',
                       fixed_comoving_scale_radius_power = 1.0, sn_data_type = 'real', low_log_prob_val = -100
                         ):
@@ -1806,9 +2100,12 @@ class PanStarsFieldManager:
         if resid_fitting_funct == 'redshift_from_grav':
             #For a redshift due to a gravitational well
             self.fit_funct, self.muDiff_of_z_funct, self.n_fit_params, self.bounds, self.mcmc_start_params, self.mcmc_step_sizes  = self.getFittingFunctG()
-        if resid_fitting_funct == 'redshift_from_vel':
+        elif resid_fitting_funct == 'redshift_from_vel_nfw':
             #for a redshift due to a velocity profile (v given in km/s)
             self.fit_funct, self.muDiff_of_z_funct, self.n_fit_params, self.bounds, self.mcmc_start_params, self.mcmc_step_sizes = self.getFittingFunctVelNFWOurs()
+        elif resid_fitting_funct == 'redshift_from_vel_point':
+            #for a redshift due to a velocity profile (v given in km/s)
+            self.fit_funct, self.muDiff_of_z_funct, self.n_fit_params, self.bounds, self.mcmc_start_params, self.mcmc_step_sizes = self.getFittingFunctVelPointMass()
         self.fit_params_by_field = {field_key:[] for field_key in self.fields.keys()}
         self.prob_fits_by_field = {field_key:{'sne_chi_sqr':0.0, 'sne_null_chi_sqr':0.0, 'sne_chi_sqr_prob':0.0, 'n_sig_gal_dens':[0.0, 0.0], 'n_sig_gal_prob':0.0, 'sne_overall_prob':0.0} for field_key in self.fields.keys()}
         print ('Starting to assign best fit curves...')
@@ -1841,6 +2138,11 @@ if __name__ == "__main__":
     line_args = sys.argv[1:]
     fitter_id = line_args[0]
     field_ids = line_args[1]
+    z_range = [-0.1, 3.0]
+    comoving_bin = 150
+    fit_comoving_density = 25
+    n_good_fits_to_show = 5
+    min_n_sn = 15
     print ('field_ids = ' + str(field_ids))
     field_ids[1:-1].split(',')
     field_ids = [int(id) for id in field_ids[1:-1].split(',')]
@@ -1852,7 +2154,6 @@ if __name__ == "__main__":
     sn_data_type = 'pantheon_plus' #'pantheon_plus' #real - for old Pantheon data
     zHD = 1 # Was 1 for old Pantheon data
     fit_params_file =  ('RandField' if do_randomization_by_field else 'RandSurvey' if do_randomization_by_survey else 'True') + 'PS1MDFieldFitter_field' + '_'.join([str(elem) for elem in field_ids])  + '_GalWeight0p' + str(int(10 * gal_dens_weighting)) + '_N' + str(fitter_id) + '.csv'
-    z_range = [0.0, 0.5]
     plot_file_name = ('RandField' if do_randomization_by_field else 'RandSurvey' if do_randomization_by_survey else 'True') + 'PS1MDFieldFitter_' + sn_data_type + '_field' + '_'.join([str(elem) for elem in field_ids]) + '_GalWeight0p' + str(int(10 * gal_dens_weighting)) + 'z_range' + str(z_range[0]) + '_' + str(z_range[1]) +'_N' + str(fitter_id) + '.pdf'
     sdssdir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/SNIsotropyProject/SDSSGalaxies/'
     fulldata_fastRead = can.readInColumnsToList('SDSS_fullCoverage_SDSSGals_pzAll.csv', sdssdir, delimiter = ',', n_ignore = 2, all_np_readable = 1)
@@ -1861,12 +2162,12 @@ if __name__ == "__main__":
     field_plotter = PanStarsFieldManager(1, full_sdss_gal_data_file = 'SDSS_fullCoverage_SDSSGals_pzAll.csv', preloaded_sdss_gals = fulldata_fastRead, randomize_each_field = do_randomization_by_field, randomize_each_survey = do_randomization_by_survey, gal_dens_weighting = gal_dens_weighting, z_range = z_range, sn_data_type = sn_data_type, zHD = zHD)# , surveys_to_include = ['PS1MD' ,'SDSS', 'SNLS'])
     #field_fitter =  PanStarsFieldManager(1, randomize_each_field = do_randomization_by_field, randomize_each_survey = do_randomization_by_survey, surveys_to_include = ['PS1MD' ,'SDSS', 'SNLS'])
     print ('field_plotter.mcmc_start_params = ' + str(field_plotter.mcmc_start_params))
+    spherical_points, fits = field_plotter.doOneDFitsOnGrid(fit_comoving_density, comoving_bin, min_n_sn, z_range = [0.03, 0.5])
+    field_plotter.makePlotOfOneDFits(spherical_points, fits, fig_size_unit = 2.5, save_plot_prefix = 'MinNSN_' + str(min_n_sn) + '_GridDens_' + str(fit_comoving_density) + '_BinSize_' + str(comoving_bin) )
+    sys.exit()
 
     fit_res = field_plotter.computeByHandFitsByField(field_ids)
 
-    #fit_res = field_plotter.computeByHandFits([1])
-
-    #fit_res = field_plotter.computeByHandFits([0,1,2])
     if save_plot:
         field_plotter.makePlotOfPS1MDFields(show = 0, save = 1, save_name = plot_file_name,  plot_fit = 1)
 

@@ -17,19 +17,21 @@ if __name__=="__main__":
     """
     cl_args = sys.argv[1:]
     test_mu_offset, sequence_ids = [cl_args[0], cl_args[1:]]
-    test_mu_offset, sequence_ids = [float(test_mu_offset), [int(id) for id in sequence_ids]]
+    test_mu_offset, sequence_ids = [float(test_mu_offset), [id for id in sequence_ids]]
     print ('[test_mu_offset, sequence_ids] = ' + str([test_mu_offset, sequence_ids]))
 
-    fitter_for_sn = cfc.CosmicFitter(w_of_funct_str = 'w0', randomize_sn = 0, sn_data_type = 'pantheon_plus', params_to_overplot = None,)
+    dir_base = '/Users/sashabrownsberger/Documents/Harvard/physics/'
+
+    fitter_for_sn = cfc.CosmicFitter(w_of_funct_str = 'w0', randomize_sn = 0, sn_data_type = 'pantheon_plus', params_to_overplot = None, dir_base = dir_base)
 
     print('fitter_for_sn.surveys  = ' + str(fitter_for_sn.surveys))
     n_sig_fig_errs = 2
 
-    save_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/plots/PosteriorWidths/'
-    target_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/mcmcResults/'
-    surveys = ['SWIFT', 'ASASSN', 'CFA1', 'CFA2', 'LOWZ', 'KAITM', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
-    covariance_files = ['GaussPriorWidth' + str(int(test_mu_offset * 1000)) + 'mMags_zLim_Full_PosteriorStats_pantheon_plus_REALH0_OmM_w0_mu' + '_mu'.join(surveys) + '_NS10000_NC50_Cov' + str(i) + '.txt' for i in sequence_ids]
-    raw_mcmc_files = ['GaussPriorWidth' + str(int(test_mu_offset * 1000)) + 'mMags_zLim_Full_MCMC_pantheon_plus_REALH0_OmM_w0_mu' + '_mu'.join(surveys) + '_NS10000_NC50_Cov' + str(i) + '.txt' for i in sequence_ids]
+    save_dir = dir_base + 'stubbs/variableMuFits/plots/PosteriorWidths/'
+    target_dir = dir_base + 'stubbs/variableMuFits/mcmcResults/'
+    surveys = ['SWIFT', 'ASASSN', 'CFA2', 'CFA1', 'KAITM', 'LOWZ', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
+    covariance_files = ['GaussPriorWidth' + str(int(test_mu_offset * 1000)) + 'mMags_zLim_Full_PosteriorStats_pantheon_plus_REALH0_OmM_w0_mu' + '_mu'.join(surveys) + '_NS10000_NC50_' + str(i) + '.txt' for i in sequence_ids]
+    raw_mcmc_files = ['GaussPriorWidth' + str(int(test_mu_offset * 1000)) + 'mMags_zLim_Full_MCMC_pantheon_plus_REALH0_OmM_w0_mu' + '_mu'.join(surveys) + '_NS10000_NC50_' + str(i) + '.txt' for i in sequence_ids]
     raw_mcmc_data = can.readInColumnsToList(target_dir + raw_mcmc_files[0], n_ignore = 1, delimiter = ', ', convert_to_float = 1, n_ignore_end = 1)
     median_survey_offsets = [np.median(col) for col in raw_mcmc_data[3:]]
     std_survey_offsets = [np.std(col) for col in raw_mcmc_data[3:]]
@@ -67,7 +69,7 @@ if __name__=="__main__":
     print ('extra_print_elems = ' + str(extra_print_elems))
 
     #top_row = '$\\Delta \\mu_S$ & $(\\cdot) \\times H_0$ (km s$^{-1}$ Mpc$^{-1}$)' + ' & ' + '$(\\cdot) \\times \Omega_M$' + ' & ' + '$(\\cdot) \\times w$' + ' & ' + '$N_{cal}$' + ' & ' + '$N_{HF}$' + ' \\\\'
-    top_row = '$ \\Delta \\mu_S $ & $< \\Delta \\mu_S>$(mmag) & $\\frac{d H_0} { d (\\cdot)} ( \\frac{\\textrm{km}}{\\textrm{s Mpc 25 mmag }} )$  & $\\frac{d \\Omega_M } { d (\\cdot)} (\\frac{1}{\\textrm{25 mmag}})$ & $\\frac{d w } { d (\\cdot)}  (\\frac{1}{\\textrm{25 mmag}})$ & $N_{cal}$ & $N_{HF}$ & $N_{cal} / N_{HF}$ \\\\'
+    top_row = '$ \\Delta \\mu_S $ & $< \\Delta \\mu_S>$(mmag) & $\\frac{d H_0} { d (\\cdot)} ( \\frac{\\textrm{km}}{\\textrm{s Mpc 100 mmag }} )$  & $\\frac{d \\Omega_M } { d (\\cdot)} (\\frac{1}{\\textrm{100 mmag}})$ & $\\frac{d w } { d (\\cdot)}  (\\frac{1}{\\textrm{100 mmag}})$ & $N_{cal}$ & $N_{HF}$ & $N_{cal} / N_{HF}$ \\\\'
     print (top_row)
     print ('\\hline')
     x_vals_to_plot = []
@@ -81,7 +83,7 @@ if __name__=="__main__":
         mean_row = mean_covariance_matrix[j]
         offset_variance = mean_row[j]
         #linear_fits = [scipy.optimize.curve_fit(lambda xs, slope, intercept: slope * xs + intercept, np.array(raw_mcmc_data[j]), np.array(raw_mcmc_data[i]), p0 = [0, 0]) for i in range(3)]
-        n_bootstraps = 100 
+        n_bootstraps = 100
         boot_linear_fits = [[] for k in range(n_bootstraps )]
         for k in range(n_bootstraps):
             boot_indeces = [random.randrange(len(raw_mcmc_data[0])) for k in range(len(raw_mcmc_data[0]))]
@@ -121,7 +123,7 @@ if __name__=="__main__":
         colors = colors + [color_dict[survey]]
         data_points_text = data_points_text + [extra_print_elems[j]]
 
-        row_to_print = extra_print_elems[j] + ' & $' + str(int(median_survey_offsets[j - 3])) + ' \\pm ' + str(int(std_survey_offsets[j - 3])) + '$ & $' + ('$ & $'.join([str(can.round_to_n(true_linear_fits[i][0] * 1000 * 0.025, n_sig_fig_errs + round_n_sig_figs[i])) + ' \\pm ' + str(can.round_to_n(boot_std_linear_fits[i] * 1000 * 0.025, n_sig_fig_errs + round_n_sig_figs[i] - 1))  for i in range(3)]))  + '$ & ' + str(n_cepheids_by_survey[survey]) + ' & ' + str(n_HF_by_survey[survey]) + ' & ' + str(can.round_to_n(n_cepheids_by_survey[survey] / n_HF_by_survey[survey], 3)) + ' \\\\'
+        row_to_print = extra_print_elems[j] + ' & $' + str(int(median_survey_offsets[j - 3])) + ' \\pm ' + str(int(std_survey_offsets[j - 3])) + '$ & $' + ('$ & $'.join([str(can.round_to_n(true_linear_fits[i][0] * 1000 * 0.100, n_sig_fig_errs + round_n_sig_figs[i])) + ' \\pm ' + str(can.round_to_n(boot_std_linear_fits[i] * 1000 * 0.100, n_sig_fig_errs + round_n_sig_figs[i] - 1))  for i in range(3)]))  + '$ & ' + str(n_cepheids_by_survey[survey]) + ' & ' + str(n_HF_by_survey[survey]) + ' & ' + str(can.round_to_n(n_cepheids_by_survey[survey] / n_HF_by_survey[survey], 3)) + ' \\\\'
         print (row_to_print)
     f, ax = plt.subplots(1,1, figsize = [10,5])
     scats = [ax.scatter(x_vals_to_plot[i], y_vals_to_plot[i], c = colors[i], marker = 'x', s = 50) for i in range(len(x_vals_to_plot))]

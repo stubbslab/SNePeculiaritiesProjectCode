@@ -20,10 +20,8 @@ from scipy import optimize
 import randomSortData as rsd
 import pickle
 import sys
-import os
 import emcee
 import corner
-import CosmicDensityProfilesForSNePerturbationsClass as cdp
 
 # import makePlotOfPS1MDFieldsClass as mpfc
 # import cantrips as cant
@@ -137,10 +135,6 @@ plt.show()
 
 class PanStarsFieldManager:
 
-    def getComovingCrossSectionOfAngularScaleAtRedshift(self, z, angular_scale_in_deg):
-        comoving_cross_section = self.r_of_z_interp(z) * np.deg2rad(angular_scale_in_deg)
-        return comoving_cross_section
-
     #Basically, we need to invert the redshift to mu funct and then the vel to z funct
     def computePecVFromMuResids(self, full_zs, deltaMus):
         zs_from_mus = self.getPeculiarZsFromMuResids(full_zs, deltaMus)
@@ -192,26 +186,41 @@ class PanStarsFieldManager:
         mu =  lambda zf, zg: (5 * np.log10(dLInMpc(zf, zg)) + 25 if zf > zg else -np.inf)
         #vals = [mu(z, zg_of_z_funct(z)) - mu(z, 0.0) for z in z_space]
         vals = [mu(z_obs_space[z_index], z_extra_space[z_index]) - mu(z_obs_space[z_index], 0.0) for z_index in range(len(z_obs_space))]
-        dLs_extraEffect, dLs_noEffect = [ np.array([dLInMpc(z_obs_space[z_index], z_extra_space[z_index]) for z_index in range(len(z_obs_space))]), np.array([dLInMpc(z_obs_space[z_index], 0) for z_index in range(len(z_obs_space))]) ]
-
-        #if 0.0 in dLs_extraEffect:
-        #    print ('Zero proper motion corrected dL detected in array: ' + str(dLs_extraEffect.tolist()))
-        #    print ( '[z_eff(z_obs_space[z_index], z_extra_space[z_index]) for z_index in range(len(z_obs_space))] = ' + str([z_eff(z_obs_space[z_index], z_extra_space[z_index]) for z_index in range(len(z_obs_space))]))
-        #if (0.0 in dLs_noEffect):
-        #    print ('Zero straight up dL detected in array: ' + str(dLs_extraEffect))
-
-        mu_diffs_with_extra_a = np.where(dLs_extraEffect > 0.0, 1 / (dLs_extraEffect), 0.0)
-        mu_diffs_with_extra_b =  np.array( [self.H_of_z(z_eff(z_obs_space[z_index], z_extra_space[z_index])) * (1.0 + z_extra_space[z_index]) for z_index in range(len(z_obs_space))] )
-        mu_diffs_with_extra = mu_diffs_with_extra_a * mu_diffs_with_extra_b
-        #if 0.0 in dLs_extraEffect:
-        #    print ('mu_diff_with_extra = ' + str(mu_diffs_with_extra))
-        mu_diff_no_extra = np.array([1 / (dLs_noEffect * self.H_of_z(z_obs_space[z_index])) for z_index in range(len(z_obs_space))])
-        partial_mu_diffs_in_z = 5.0 / np.log(10) * (mu_diffs_with_extra - mu_diff_no_extra)
+        partial_mu_diffs_in_z = [5.0 / np.log(10) * (1 / (dLInMpc(z_obs_space[z_index], z_extra_space[z_index]) * self.H_of_z(z_eff(z_obs_space[z_index], z_extra_space[z_index])) * (1.0 + z_extra_space[z_index])) - 1 / (dLInMpc(z_obs_space[z_index], 0) * self.H_of_z(z_obs_space[z_index]))) for z_index in range(len(z_obs_space))]
         mu_diff_errs_from_z_errs = np.abs(np.array(partial_mu_diffs_in_z) * np.array(z_obs_space_errs))
         vals = np.where(np.isnan(vals), np.inf, vals)
         mu_diff_errs_from_z_errs = np.where(np.isnan(vals), 0, mu_diff_errs_from_z_errs)
+        #for z_index in range(len(z_obs_space)):
+        #    if dLInMpc(z_obs_space[z_index], z_extra_space[z_index]) == 0.0:
+        #        print ('[z_obs_space[z_index], z_extra_space[z_index], dLInMpc(z_obs_space[z_index], z_extra_space[z_index]), mu(z_obs_space[z_index], z_extra_space[z_index]), vals[z_index] ] = ' + str([z_obs_space[z_index], z_extra_space[z_index], dLInMpc(z_obs_space[z_index], z_extra_space[z_index]), mu(z_obs_space[z_index], z_extra_space[z_index]), vals[z_index] ]))
 
         return vals, mu_diff_errs_from_z_errs
+
+    def plot_mwd(self, RA, Dec, ax, org=0,title='Aitoff Sky', projection='aitoff'):
+        ''' RA, Dec are arrays of the same length.
+        RA takes values in [0,360), Dec in [-90,90],
+        which represent angles in degrees.
+        org is the origin of the plot, 0 or a multiple of 30 degrees in [0,360).
+        title is the title of the figure.
+        projection is the kind of projection: 'mollweide', 'aitoff', 'hammer', 'lambert'
+        '''
+        x = np.remainder(RA+360-org,360) # shift RA values
+        ind = x>180
+        x[ind] -=360    # scale conversion to [-180, 180]
+        x=-x    # reverse the scale: East to the left
+        tick_labels = np.array([150, 120, 90, 60, 30, 0, 330, 300, 270, 240, 210])
+        tick_labels = np.remainder(tick_labels+360+org,360)
+        #fig = plt.figure(figsize=(10, 5))
+        #ax = fig.add_subplot(111, projection=projection, axisbg ='LightCyan')
+        ax.scatter(np.radians(x),np.radians(Dec))  # convert degrees to radians
+        ax.set_xticklabels(tick_labels)     # we add the scale on the x axis
+        ax.set_title(title)
+        ax.title.set_fontsize(15)
+        ax.set_xlabel("RA")
+        ax.xaxis.label.set_fontsize(12)
+        ax.set_ylabel("Dec")
+        ax.yaxis.label.set_fontsize(12)
+        ax.grid(True)
 
     def plotPantheonSNOnSky(self, data_set,
                             projection = 'aitoff', save = 1, show = 0, surveys_to_display = 'all', z_range = [-0.1, 3.0],
@@ -268,10 +277,98 @@ class PanStarsFieldManager:
         if print_params: print ('np.array(params).tolist() + [chi_sqr] = ' +str(np.array(params).tolist() + [chi_sqr]) )
         return fit_vals, chi_sqr, weighted_mean
 
+    def getFittedMCMCObject(self, fit_funct, all_zs, all_resids, all_errs, dof, mcmc_start_params, mcmc_step_sizes, bounds, ):
+        MCMC_fit_funct = lambda params: np.sum(((fit_funct(all_zs, *params) - all_resids) / all_errs) ** 2.0 )
+
+        new_MCMC_fitter = mcmc.MCMCFitter(MCMC_fit_funct, mcmc_start_params, mcmc_step_sizes, self.n_mcmc_steps, bounds = bounds, likelihood_from_chisqr  = 1)
+        return new_MCMC_fitter
+
+    def doMinimization(self, fit_funct, zs, resids, errs, dof, fit_params_A, fit_params_B, fit_params_C, fit_params_D = None, fit_params_E = None, bounds= None):
+        print('[fit_params_A, fit_params_B, fit_params_C, fit_params_D, fit_params_E] = ' + str([fit_params_A, fit_params_B, fit_params_C, fit_params_D, fit_params_E] ))
+        brute_minimization = []
+        brute_chisqr = np.inf
+        start = time.time()
+        if fit_params_D is None:
+            fit_params_D = [None]
+        if fit_params_E is None:
+            fit_params_E = [None]
+        print ('[fit_params_A, fit_params_B, fit_params_C, dof, fit_params_D, fit_params_E] = ' + str([fit_params_A, fit_params_B, fit_params_C, dof, fit_params_D, fit_params_E] ))
+        for fit_param_A in fit_params_A:
+            print ('working on fit_param_A = ' + str(fit_param_A))
+            for fit_param_B in fit_params_B:
+                for fit_param_C in fit_params_C:
+                    for fit_param_D in fit_params_D:
+                        #this_fit = [fit_z, fit_beta, fit_rwidth, fit_power]
+                        for fit_param_E in fit_params_E:
+                            this_fit = [fit_param_A, fit_param_B, fit_param_C]
+                            if not(fit_param_D is None) :
+                                this_fit = this_fit + [fit_param_D]
+                            if not(fit_param_E is None) :
+                                this_fit = this_fit + [fit_param_E]
+                            #print ('[fit_param_A, fit_param_B, fit_param_C, dof, fit_param_D, fit_param_E] = ' + str([fit_param_A, fit_param_B, fit_param_C, dof, fit_param_D, fit_param_E] ))
+                            #this_fit_resids = fit_funct(zs, *this_fit)
+                            #this_fit_mean = np.sum( ((this_fit_resids - resids) * errs ** (-2.0))) / np.sum(errs ** (-2.0))
+                            #this_fit_mean = c.weighted_mean(this_fit_resids - resids, errs)
+                            #print ('this_fit_mean = ' + str(this_fit_mean ))
+                            #print ('this_fit = ' + str(this_fit))
+                            this_fit_resids, this_fit_chisqr, this_fit_weighted_mean = self.printingFitFunct(fit_funct, zs, resids, errs, np.array(this_fit))
+                            #print ('this_fit + [this_fit_chisqr] = ' + str(this_fit + [this_fit_chisqr]))
+                            #this_fit_rchisqr_argmin = np.argmin(this_fit_rchisqrs)
+                            if this_fit_chisqr < brute_chisqr:
+                                brute_chisqr = this_fit_chisqr
+                                brute_minimization = this_fit[:]
+        end = time.time()
+        print ('Brute minimization took ' + str(end - start) + 's')
+        print ('[brute_minimization, brute_chisqr] = ' + str([brute_minimization, brute_chisqr]))
+        print ('Now trying to refine using curve_fit...')
+        true_fit_rchisqr = brute_chisqr
+        funct_fit = brute_minimization
+        try:
+            print ('brute_minimization = ' + str(brute_minimization))
+            #final_minimization = scipy.optimize.curve_fit(fit_funct, all_zs, all_resids, p0 = brute_minimization, sigma=all_errs, maxfev = maxfev, bounds = bounds)
+            print ('[bounds, brute_minimization] = ' + str([bounds, brute_minimization]))
+            final_minimization = optimize.minimize(lambda params: self.printingFitFunct(fit_funct, zs, resids, errs, params, print_params = 0)[1], brute_minimization, bounds , method='L-BFGS-B')
+            #fit_res = optimize.curve_fit(lambda zs, A, mu: fit_funct(zs, A, mu, sig, 0.2, 0.0), all_zs, all_resids, p0 = [0.0, max(all_zs) / 2.0], sigma=all_errs, maxfev = maxfev)
+            this_funct_fit = final_minimization['x']
+        except RuntimeError:
+            print("Curve_fit failed!.  Plotting initial guess. ")
+            this_funct_fit = np.array(brute_minimization)
+        final_chisqr = self.printingFitFunct(fit_funct, zs, resids, errs, np.array(this_funct_fit))[1]
+        print ('[this_funct_fit, final_chisqr] = ' + str([this_funct_fit, final_chisqr]))
+        final_rchisqr = final_chisqr / dof
+
+        return [this_funct_fit, final_chisqr]
+
+
     def redshift_of_v_funct(self, beta, coses_of_los_angle, max_beta = 0.999):
         beta = np.where(np.abs(beta) < 1.0, beta, max_beta * np.sign(beta))
         redshift = ((1 + beta * coses_of_los_angle)/np.sqrt(1-abs(beta) ** 2.0) - 1)
         return redshift
+
+    def computeVelocityFieldFromNFWHalo(self, zs_to_calc, central_z, critical_mass, concentration, impact_param,
+                                        r_of_z_interp, ):
+
+        #extra_z_of_zMeas_funct = lambda single_z, central_z, v, r_width: redshift_of_v_funct(v) if abs( r_of_z_interp(central_z) - r_of_z_interp(single_z) ) < r_width / 2.0 else 0.0
+        #D_growth = lambda single_z: H_of_z(single_z) * integrate.quad(lambda z_int: (1 + z_int) / np.sqrt((1 + z_int) ** 3 * OmM + (1 + z_int) ** 0 * OmL + (1 + z_int) ** 4 * OmR) ** 3.0, single_z, np.inf)[0]
+        #d_z_D_growth = lambda single_z (1.0 + )
+        d_z_D_growth_over_D_term1 = lambda single_z: d_H_d_z (single_z) / H_of_z(single_z)
+        d_z_D_growth_over_D_term2 = lambda single_z: -(1.0 + single_z) / H_of_z(single_z) ** 3.0 / integrate.quad(lambda z_int: (1 + z_int) / H_of_z(z_int) ** 3.0, single_z, np.inf)[0]
+        #d_z_D_growth_over_D = lambda single_z: (1.0 + single_z) * H_of_z(single_z) * (d_z_D_growth_over_D_term1(single_z) + d_z_D_growth_over_D_term2(single_z))
+        d_z_D_growth_over_D = lambda single_z: (d_z_D_growth_over_D_term1(single_z) + d_z_D_growth_over_D_term2(single_z))
+        #The geometry of how our line of sight intersects the halo
+        r_incidence_leg = lambda single_r, central_r, r_incidence: (np.sqrt(central_r ** 2.0 - r_incidence ** 2.0 ) - single_r)
+        r_well_from_geometry = lambda single_r, central_r, r_incidence: np.sqrt(r_incidence ** 2.0 + r_incidence_leg(single_r, central_r, r_incidence) ** 2.0)
+        sin_r_angle_from_geometry = lambda single_r, central_r, r_incidence:  r_incidence_leg(single_r, central_r, r_incidence) / r_well_from_geometry(single_r, central_r, r_incidence)
+
+        delta_vir_of_z = lambda single_z: (18.0 * np.pi + 82.0 * ((Om0 *(1.0 + single_z) ** 3.0) / H_of_z(single_z) ** 2.0) - 39.0 * ((Om0 *(1.0 + single_z) ** 3.0) / H_of_z(single_z) ** 2.0) ** 2.0)
+        #for NFW; r_s should be given in Mpc
+        nfw_unitless_int = lambda s: np.log(s + 1) - s / (s+1)
+        nfw_mass_enclosed = lambda single_r, concentration, critical_mass, critical_r: nfw_unitless_int(concentration * single_r / critical_r) / nfw_unitless_int(concentration) * critical_mass
+        int_of_rsqr_delta_nfw = lambda scaled_r, c: (nfw_unitless_int(scaled_r) - nfw_unitless_int(0.0) - 1.0 / 3.0 * (scaled_r) ** 3.0 / (c * (1 + c) ** 2.0))
+        #delta_portion_funct = lambda single_z, central_z, delta_s, rs, c, b_impact: rs ** 1.0 * (rs / r_well_from_geometry(r_of_z_interp(single_z), r_of_z_interp(central_z), b_impact * rs)) ** 2.0 * delta_s * (int_of_rsqr_delta_nfw( min(c, r_well_from_geometry(r_of_z_interp(single_z), r_of_z_interp(central_z), b_impact * rs) / rs), c) ) if (single_z != central_z or abs(b_impact) > 0.0) else 0.0
+        delta_portion_funct = lambda single_z, central_z, delta_s, rs, c, b_impact: rs ** 1.0 * (rs / r_well_from_geometry(r_of_z_interp(single_z), r_of_z_interp(central_z), b_impact * r_of_z_interp(central_z))) ** 2.0 * delta_s * (int_of_rsqr_delta_nfw( min(c, r_well_from_geometry(r_of_z_interp(single_z), r_of_z_interp(central_z), b_impact * rs) / rs), c) ) if (single_z != central_z or abs(b_impact) > 0.0) else 0.0
+
+
 
     def redshiftDueToGravPotential (self, zs, central_z, delta, R):
         speedol = self.astro_arch.getc()
@@ -281,6 +378,7 @@ class PanStarsFieldManager:
         extra_z_of_zMeas_funct_G = (phi_of_delta(single_z, float(self.r_of_z_interp(central_z)), delta, R) - phi_of_delta(0.0, float(self.r_of_z_interp(central_z)), delta, R)) / (speedol) ** 2.0
         fitted_G, fitted_G_errs = np.array(self.getErroneousRedshiftPlot(lambda single_z: extra_z_of_zMeas_funct_G(single_z, central_z, delta, R), zs, zHD = self.zHD, astro_arch = self.astro_arch, r_of_z_interp = self.r_of_z_interp ))
         return fitted_G
+
 
     def getFittingFunctG(self):
         n_G_fit_params = 3
@@ -297,6 +395,7 @@ class PanStarsFieldManager:
         d_z_D_growth_over_D_term2 = -(1.0 + single_z) / self.H_of_z(single_z) ** 3.0 / integrate.quad(lambda z_int: (1 + z_int) / self.H_of_z(z_int) ** 3.0, single_z, np.inf)[0]
         d_z_D_growth_over_D = d_z_D_growth_over_D_term1 + d_z_D_growth_over_D_term2
         return d_z_D_growth_over_D
+
 
     #The geometry of how our line of sight intersects the halo
     def r_incidence_leg (self, single_r, central_r, r_incidence):
@@ -332,7 +431,10 @@ class PanStarsFieldManager:
     #    cos_r = 1 - np.cos()
     #    return cos_r
 
-    """
+    def overdensty_vir_of_z (self, single_z):
+        overdensity = (18.0 * np.pi + 82.0 * ((self.Om0 *(1.0 + single_z) ** 3.0) / H_of_z(single_z) ** 2.0) - 39.0 * ((self.Om0 *(1.0 + single_z) ** 3.0) / H_of_z(single_z) ** 2.0) ** 2.0)
+        return overdensity
+
     def nfw_unitless_over_int(self, radius_per_rs):
         nfw_int = np.log(radius_per_rs + 1) - radius_per_rs / (radius_per_rs+1)
         return nfw_int
@@ -340,6 +442,7 @@ class PanStarsFieldManager:
     def nfw_mass_enclosed(self, r, mass_overdensity, concentration, critical_density, overdensity):
         r_overdensity = self.r_overdensity(mass_overdensity, critical_density, overdensity)
         M_enc = self.nfw_unitless_over_int(concentration * r / r_overdensity) / self.nfw_unitless_over_int(concentration) * mass_overdensity
+
         return M_enc
 
     def nfw_mass_enclosed_ours(self, halo_density, radius_in_scale_radii):
@@ -352,13 +455,10 @@ class PanStarsFieldManager:
         #r_overdensity = self.r_overdensity(mass_overdensity, critical_density, overdensity)
         #M_enc = self.nfw_unitless_over_int(concentration * r / r_overdensity) / self.nfw_unitless_over_int(concentration) * mass_overdensity
         return halo_mass
-    """
 
-    """
     def r_overdensity(self, M_overdensity, critical_density, overdensity):
         r = ((M_overdensity * 3.0) / (4.0 * np.pi * overdensity * critical_density )) ** (1.0 / 3.0)
         return r
-    """
 
     # returns the critical mass with units of T M_{sun} Mpc ^ -3 - remember T = tera = 10 ^ 12
     def crit_density(self, z):
@@ -375,32 +475,27 @@ class PanStarsFieldManager:
         #print ('[crit_density_unitless_part, crit_density_unitfull_part] = ' + str([crit_density_unitless_part, crit_density_unitfull_part]))
         return crit_density
 
-
-
     #Mass should be in M_sun X 10 ^(12) ; returns r ** 2.0 * int(delta r*2 4 pi dr) in units of Mpc
-    def delta_portion_funct(self, single_rs, central_z, angular_offsets, model_params):
+    def delta_portion_funct(self, single_z, central_z, M_overdensity, concentration, b_impact, overdensity, ):
         central_r = self.r_of_z_interp(central_z) #units of Mpc
-        critical_density = self.crit_density(central_z) #units of GMsun / Mpc ^ 3
-        OmM_of_z = self.OmM * (1.0 + central_z) ** 3.0
-        r_wells = self.r_well_from_geometry(single_rs, central_r, angular_offsets)
+        critical_density = self.crit_density(single_z) #units of GMsun / Mpc ^ 3
+        r_overdensity = self.r_overdensity(M_overdensity, critical_density, overdensity)
+        rs = r_overdensity / concentration
+        r_well = self.r_well_from_geometry(self.r_of_z_interp(single_z), self.r_of_z_interp(central_z), b_impact * central_r)
+        M_enc = self.nfw_mass_enclosed(r_well, M_overdensity, concentration, critical_density, overdensity)
+        delta_over_rsqr_int_over_rsqr = 1.0 / (4.0 * np.pi * r_well ** 2.0) * M_enc / critical_density
 
-        #Those models that are based on unitless overdensities rather than massess
-        #    need the overdensity to be passed as an extra parameter.
-        if self.resid_profile_funct in ['exp_void']:
-            extra_params = [critical_density, OmM_of_z]
-        else:
-            extra_params = None
-        M_encs = self.radial_mass_funct(r_wells, model_params, extra_params = extra_params)
-        #print ('angular_offsets = ' + str(angular_offsets))
-        #print ('r_wells = ' + str(r_wells))
-        #print ('model_params = ' + str(model_params))
-        M_encs_scaled = M_encs / (4.0 * np.pi * r_wells ** 2.0 * OmM_of_z * critical_density)
-        deltas_over_rsqr_int_over_rsqr = M_encs_scaled
+        return delta_over_rsqr_int_over_rsqr
 
-        return deltas_over_rsqr_int_over_rsqr
+    def computeConcentrationForNFW(self, OmM_at_z, critical_density, halo_mass, scale_radius, overdensity_param):
+        """
+        Compute the concentration parameter, c, under the assumption
+           that the halo density falls discontinuously to 0 for radii
+           beyond c * r_s (r_s being the NFW halo scale radius).
+        """
+        concentration = ((3.0 * halo_mass) / (overdensity_param * OmM_at_z * critical_density * 4.0 * np.pi)) ** (1.0 /3.0) / scale_radius
+        return concentration
 
-
-    '''
     #Mass should be in M_sun X 10 ^(12) ; returns r ** 2.0 * int(delta r*2 4 pi dr) in units of Mpc
     # delta_portion_funct_ours(single_z, central_z, halo_density, r_scale, b_impact, overdensity)
     def delta_portion_funct_NFW_ours(self, single_zs, central_z, r_cutoff, r_scale, angular_offsets, overdensity_param = None  ):
@@ -471,6 +566,37 @@ class PanStarsFieldManager:
         #M_enc_scaled = M_enc / (OmM_of_z * critical_density)
         delta_over_rsqr_int_over_rsqr = np.where(r_wells < cutoff_radius, halo_mass * (r_wells / cutoff_radius) ** 3.0, halo_mass ) / (OmM_of_z * critical_density * 4.0 * np.pi * r_wells ** 2.0)
         return delta_over_rsqr_int_over_rsqr
+
+    def computeVirialOverdensity(self, single_z):
+        local_OmM = self.OmM * (1.0 + single_z) ** 3.0 / (self.OmL + self.OmM * (1.0 + single_z) ** 3.0)
+        local_x = local_OmM - 1
+        delta_vir = 18.0 * np.pi ** 2.0 + 82.0 * local_x - 39.0 * local_x ** 2.0
+        return delta_vir
+
+    def getLOSVelocityFieldAlongLOSTraditional(self, zs, central_z, M_overdensity, concentration, b_impact, overdensity = 'virial'):
+        zs = calc_zs + ref_zs
+        if overdensity == 'virial':
+            overdensity = np.array([self.computeVirialOverdensity(single_z) for single_z in zs])
+        Hs_of_z = [self.H_of_z(single_z) for single_z in zs]
+        d_zs_D_over_D = [self.d_z_D_growth_over_D(single_z) for single_z in zs]
+
+
+        single_rs = [self.r_of_z_interp(single_z) for single_z in zs]
+        central_r = self.r_of_z_interp(central_z)
+        #critical_densities = np.array([self.crit_density(single_z) for single_z in zs])
+        critical_density = self.crit_density(central_z)
+
+        r_overdensity = self.r_overdensity(M_overdensity, critical_density, overdensity)
+        r_scale = r_overdensity / concentration
+        sins_of_los_angle = self.sin_of_infall_angle_relative_to_los(single_rs, central_r, central_r * b_impact)
+
+        delta_portions = [self.delta_portion_funct(single_z, central_z, M_overdensity, concentration, b_impact, overdensity) for single_z in zs]
+
+        speedol = self.astro_arch.getc()
+        los_velocity_field = self.H0 / speedol * np.array(Hs_of_z) * np.array(d_zs_D_over_D) * np.array(sins_of_los_angle) * delta_portions
+
+        return los_velocity_field
+
 
     def getHaloMassFromVariedParam(self, halo_mass_power, linear_scaling_term = 10 ** 3.0):
         """
@@ -618,44 +744,9 @@ class PanStarsFieldManager:
         los_velocity_field = self.H0 / speedol * np.array(Hs_of_z) * np.array(d_zs_D_over_D) * delta_portions
         return los_velocity_field, coses_of_los_angle
 
-    '''
 
-    def getVelocityField(self, zs, RAs, Decs, field_center, central_sky_RA_offset, central_sky_Dec_offset, profile_params, ):
-         """
-         For a set of sky coordinates in 3 space (redshift, angles on sky), determine
-            their line of sight (los) peculiar velocities induced by a the spherical
-            overdensity model of the data.
-         We rotate the spherical coordinates to be centered on some central
-             coordinates, central_sky_RA_offset, central_sky_Dec_offset.
-         """
-         #print ('field_center = ' + str(field_center))
-         #print ('profile_params = ' + str(profile_params))
-         deg_to_rad = self.astro_arch.getDegToRad()
-         central_z, field_RA, field_Dec = field_center
-         #central_RA, central_Dec = [field_RA + np.sin(central_sky_phi * deg_to_rad) * central_sky_theta * np.cos(field_Dec * deg_to_rad), field_Dec + np.cos(central_sky_phi * deg_to_rad) * central_sky_theta]
-         central_RA, central_Dec = [field_RA + central_sky_RA_offset, field_Dec + central_sky_Dec_offset]
-         #print ('[central_RA, central_Dec] = ' + str([central_RA, central_Dec] ))
-         #print ('RAs = ' + str(RAs))
-         #print ('Decs = ' + str(Decs))
-         Hs_of_z = [self.H_of_z(single_z) for single_z in zs]
-         d_zs_D_over_D = [self.d_z_D_growth_over_D(single_z) for single_z in zs]
-         #Relationship between comoving radial distance and redshift is determined by cosmology.
-         single_rs = np.array([self.r_of_z_interp(single_z) for single_z in zs])
-         central_r = self.r_of_z_interp(central_z)
-         critical_density = self.crit_density(central_z)
-         angular_offsets = np.array([can.measureAngularSeparationOnSky([RAs[i], Decs[i]], [central_RA, central_Dec], return_radian = 1) for i in range(len(zs))])
-         #print ('angular_offsets = ' + str(angular_offsets))
-         coses_of_los_angle = self.cos_of_infall_angle_relative_to_los(single_rs, central_r, angular_offsets)
-
-         delta_portions = self.delta_portion_funct(single_rs, central_z, angular_offsets, profile_params) #in units of Mpc
-         speedol = self.astro_arch.getc()
-         #print ('[Hs_of_z, d_zs_D_over_D, delta_portions] = ' + str([Hs_of_z, d_zs_D_over_D, delta_portions]))
-         los_velocity_field = self.H0 / speedol * np.array(Hs_of_z) * np.array(d_zs_D_over_D) * delta_portions
-         return los_velocity_field, coses_of_los_angle
-
-    '''
     #parameters are the point mass in 10^XX M_sun, the central z, and angles describing the impact parameter
-    def getLOSVelocityFieldAlongLOSPointMass(self, zs, RAs, Decs, field_center, halo_mass_power, central_sky_RA_offset, central_sky_Dec_offset, ):
+    def getLOSVelocityFieldAlongLOSPointMass(self, zs, RAs, Decs, field_center, central_z, halo_mass_power, central_sky_RA_offset, central_sky_Dec_offset, ):
         """
         For a set of sky coordinates in 3 space (redshift, angles on sky), determine
            their line of sight (los) peculiar velocities induced by a point mass
@@ -663,9 +754,9 @@ class PanStarsFieldManager:
         We rotate the spherical coordinates to be centered on some central
             coordinates, central_sky_RA_offset, central_sky_Dec_offset.
         """
-        central_z, field_RA, field_Dec = field_center
         comoving_scale_radius_power = self.fixed_comoving_scale_radius_power
         deg_to_rad = self.astro_arch.getDegToRad()
+        field_RA, field_Dec = field_center
         #central_RA, central_Dec = [field_RA + np.sin(central_sky_phi * deg_to_rad) * central_sky_theta * np.cos(field_Dec * deg_to_rad), field_Dec + np.cos(central_sky_phi * deg_to_rad) * central_sky_theta]
         central_RA, central_Dec = [field_RA + central_sky_RA_offset, field_Dec + central_sky_Dec_offset]
         Hs_of_z = [self.H_of_z(single_z) for single_z in zs]
@@ -680,35 +771,21 @@ class PanStarsFieldManager:
         #r_incidences = np.sin(angular_offsets / 2.0) * central_r * 2.0
         #r_seps = self.r_well_from_geometry(single_rs, central_r, angular_offsets)
         coses_of_los_angle = self.cos_of_infall_angle_relative_to_los(single_rs, central_r, angular_offsets)
-
-        delta_portions = self.delta_portion_funct(zs, central_z, angular_offsets, halo_mass) #in units of Mpc
+        delta_portions = self.delta_portion_funct_point_mass(zs, central_z, angular_offsets, halo_mass) #in units of Mpc
 
         speedol = self.astro_arch.getc()
         #self.H0 / speedol gives H0 / c in units of 1/MPC
         los_velocity_field = self.H0 / speedol * np.array(Hs_of_z) * np.array(d_zs_D_over_D) * delta_portions
         return los_velocity_field, coses_of_los_angle
 
-    '''
-
-    def getMuDiffOfVelocityField(self, calc_zs, calc_RAs, calc_Decs, ref_zs, ref_RAs, ref_Decs, ref_muDiffs, ref_muErrs, field_center_on_sky, vel_field_params, print_steps = 0):
+    #Here
+    def getMuDiffOfVelocityField(self, calc_zs, calc_RAs, calc_Decs, ref_zs, ref_RAs, ref_Decs, ref_muDiffs, ref_muErrs, field_center, vel_field_params, vel_field_funct, print_steps = 0):
         all_zs = np.array(calc_zs).tolist() + np.array(ref_zs).tolist()
         all_RAs = np.array(calc_RAs).tolist() + np.array(ref_RAs).tolist()
         all_Decs = np.array(calc_Decs).tolist() + np.array(ref_Decs).tolist()
-
-        central_z, RA_offset, Dec_offset = vel_field_params[0:3]
-        RA_offset_to_center = (180.0 - RA_offset)
-        #print ('field_center_on_sky = ' + str(field_center_on_sky[0]))
-        #print ('all_RAs = ' + str(all_RAs))
-        all_RAs = self.centerRAs(all_RAs,  RA_offset_to_center )
-        #print ('all_RAs = ' + str(all_RAs))
-        central_RA, central_Dec = [ self.centerRAs([field_center_on_sky[0]],  RA_offset_to_center )[0], field_center_on_sky[1] ]
-        #print ('central_RA = ' + str(central_RA))
-
-        halo_params = vel_field_params[3:]
-        field_center = [central_z] + [central_RA, central_Dec]
-        scaled_velocities, coses_of_los_angles = self.getVelocityField(all_zs, all_RAs, all_Decs, field_center, RA_offset, Dec_offset, halo_params)
+        scaled_velocities, coses_of_los_angles = vel_field_funct(all_zs, all_RAs, all_Decs, field_center, *vel_field_params)
         vel_redshifts = self.redshift_of_v_funct(scaled_velocities, coses_of_los_angles)
-        #print ('vel_redshifts = ' + str(vel_redshifts))
+
         #for z_index in range(len(all_zs)):
         #    if vel_redshifts[z_index] > all_zs[z_index]:
         #        print ('[all_zs[z_index], all_RAs[z_index], all_Decs[z_index], scaled_velocities[z_index], coses_of_los_angles[z_index], vel_redshifts[z_index]] = ' + str([all_zs[z_index], all_RAs[z_index], all_Decs[z_index], scaled_velocities[z_index], coses_of_los_angles[z_index], vel_redshifts[z_index]]  ))
@@ -720,8 +797,6 @@ class PanStarsFieldManager:
         #bad_diffs = np.where(np.isinf(weighted_diffs), 0.0, 1.0)
         #weighted_mean_diff = np.sum(np.where(bad_diffs, weighted_diffs, 0.0)) / np.sum(weights * bad_diffs)
         weighted_mean_diff = np.sum(weighted_diffs) / np.sum(weights)
-        #Do we want to subtract away the mean residual?
-        weighted_mean_diff = 0.0
         if 0:
             print ('erroneous_mus.tolist() = ' + str(erroneous_mus.tolist()))
             print ('weighted_mean_diff = ' + str(weighted_mean_diff))
@@ -738,7 +813,7 @@ class PanStarsFieldManager:
             corrected_muDiffs = np.array(erroneous_mus[0:-len(ref_zs)]) - weighted_mean_diff
         return corrected_muDiffs
 
-    '''
+
     def getFittingFunctVelNFW(self):
         n_vel_fit_params = 4
         vel_bounds = [(0.0, 2.0), (1, 1000.0), (1, 20), (0, 5)]
@@ -859,11 +934,11 @@ class PanStarsFieldManager:
         #MCMC_chain_starts = MCMC_chain_starts  + [[vel_bounds[0][1] / (n_seeds_in_z - 1) * i + vel_bounds[0][0], np.log10(2.0), 0.05, 0.05] for i in range(n_seeds_in_z)]
         #print ('MCMC_chain_starts = ' + str(MCMC_chain_starts))
         return [sub_funct, muDiff_of_z_funct, n_vel_fit_params, vel_bounds, MCMC_chain_starts, mcmc_step_sizes]
-    '''
 
     def computeRChiSqr(self, all_zs, all_RAs, all_Decs, all_resids, all_errs, field_center, n_model_params, fit_params, print_params = 0):
         #print ('fit_params = ' + str(fit_params))
-        fitted_resids = self.muDiff_of_z_funct(all_zs, all_RAs, all_Decs, all_zs, all_RAs, all_Decs, all_resids, all_errs, field_center, fit_params)
+        fitted_resids = self.muDiff_of_z_funct(all_zs, all_RAs, all_Decs, all_zs, all_RAs, all_Decs, all_resids, all_errs, field_center, fit_params, self.fit_funct)
+        #print ('fitted_resids.tolist() = ' + str(fitted_resids.tolist()))
         #weights = np.array(all_errs) ** (-2.0)
         #weighted_mean_diff = np.sum(np.array(fitted_resids - all_resids)  * weights) / np.sum(weights)
         #weighted_mean_diff = 0.0
@@ -1085,7 +1160,7 @@ class PanStarsFieldManager:
                 ax.plot(xs_to_plot, ys_to_plot, c = 'k')
                 ax.scatter(all_xs,  all_ys, c = 'k', marker = 'x')
                 chi_sqr = self.computeRChiSqr(all_zs, all_RAs, all_Decs, all_resids, all_errs, field_center, self.n_fit_params, fit_params)
-                null_chi_sqr = self.computeRChiSqr(all_zs, all_RAs, all_Decs, all_resids, all_errs, field_center, self.n_null_fit_params, null_params)
+                null_chi_sqr = self.computeRChiSqr(all_zs, all_RAs, all_Decs, all_resids, all_errs, field_center, 1, null_params)
                 label_str = label_str + 'params ' + str( [can.round_to_n(fit_param, plot_param_round_to) for fit_param in fit_params]) + r' with $\chi^2_{\nu}$ ' + str(can.round_to_n(chi_sqr, plot_chi_sqr_round_to)) + r'; $\chi^2_{\nu,0}$ ' + str(can.round_to_n(null_chi_sqr, plot_chi_sqr_round_to))
                 chi_squares_by_field[field_num] = [chi_sqr, null_chi_sqr ]
 
@@ -1144,7 +1219,7 @@ class PanStarsFieldManager:
         return 1
 
     #Randomly pair the SNe residuals and residual uncertainties with zs,
-    def randomizeSNBySurvey(self, sn_to_randomize, rand_indeces):
+    def randomizeSNBySurvey(self, sn_to_randomize):
         all_surveys = list(set([sn['survey'] for sn in sn_to_randomize]))
         randomized_sn = []
         sn_by_survey = {survey:[] for survey in all_surveys}
@@ -1157,7 +1232,7 @@ class PanStarsFieldManager:
         #self.all_sn = randomized_sn
         return randomized_sn
 
-    def randomizeAllSN(self, sn_to_randomize, rand_indeces):
+    def randomizeAllSN(self, sn_to_randomize):
         """
         Shuffle the number of mu sigmas by which a supernova is off, relative
             to the spatial coordinates (z, RA, Dec).  The mu uncertainties
@@ -1167,6 +1242,7 @@ class PanStarsFieldManager:
         The new numbers of sigma off are then use to redetermine the mus at
             each spatial coordinate.
         """
+
         all_zs = [sn['mu'] for sn in sn_to_randomize]
         all_mus = [sn['mu'] for sn in sn_to_randomize]
         all_muResids = [sn['mu'] - self.mu_of_z(sn['z']) for sn in sn_to_randomize]
@@ -1174,7 +1250,6 @@ class PanStarsFieldManager:
         all_nMuSigs = (np.array(all_muResids) / np.array(all_muErrs))
         #rand_mus, rand_muDiffs, rand_muErrs = rsd.randomShuffleListOfLists([all_mus, all_muDiffs, all_muErrs])
         rand_nMuSigs = rsd.randomShuffleListOfLists([all_nMuSigs])[0]
-        rand_nMuSigs = [all_nMuSigs[i] for i in rand_indeces]
         for j in range(len(sn_to_randomize)):
             sn_to_randomize[j]['muTrue'] = sn_to_randomize[j]['mu']
             sn_to_randomize[j]['mu'] = self.mu_of_z(sn_to_randomize[j]['z']) + rand_nMuSigs[j] * all_muErrs[j]
@@ -1184,52 +1259,20 @@ class PanStarsFieldManager:
             #sn_to_randomize[j]['muErr'] = rand_muErrs[j]
         return sn_to_randomize
 
-    def generateRandomizedSNe(self, sn_to_randomize, rand_sn_data_list, rand_sn_data_dir,  randomize_by_survey, randomize_all_sn):
-        n_sn = len(sn_to_randomize)
-        orig_indeces = list(range(n_sn))
-        orig_paired_indeces = []
-        rand_indeces = []
-        if randomize_all_sn:
-            rand_indeces = rsd.randomShuffleListOfLists([orig_indeces])[0]
-        elif randomize_by_survey:
-            all_surveys = list(set([sn['survey'] for sn in sn_to_randomize]))
-            sn_indeces_by_survey = {survey:[] for survey in all_surveys}
-            for i in range(len(sn_to_randomize)):
-                sn_indeces_by_survey[sn['survey']] = sn_by_survey[sn['survey']] + [i]
-            for survey in all_surveys:
-                sn_indeces_in_survey = sn_by_survey[survey]
-                orig_paired_indeces = orig_paired_indeces + sn_indeces_in_survey
-                rand_sn_indeces_in_survey = rsd.randomShuffleListOfLists([sn_indeces_in_survey])[0]
-                rang_indeces = rand_indeces + rand_sn_indeces_in_survey
-            orig_paired_indeces, rand_indeces = can.safeSortOneListByAnother(orig_paired_indeces, [orig_paired_indeces, rand_indeces])
-        else:
-            rand_indeces = orig_indeces
-        can.saveListsToColumns([orig_indeces, rand_indeces], rand_sn_data_list, rand_sn_data_dir, header = 'orig, rand', sep = ' ')
-        return [orig_indeces, rand_indeces]
+    def initializeSN(self, z_range, surveys_to_include, surveys_to_ignore, randomize_all = 0, randomize_by_survey = 0):
 
-    def loadRandomizedSN(self, all_sns, surveys_to_include, randomized_sn_number, randomize_by_survey, randomize_all):
-        rand_sn_data_dir = self.dir_archive.getRandomizedDrawResultsDir()
-        rand_sn_data_list = self.rand_sn_file_prefix + str(randomized_sn_number) + '.txt'
-        if os.path.exists(rand_sn_data_dir + rand_sn_data_list):
-            randomize_matching = can.readInColumnsToList(rand_sn_data_dir + rand_sn_data_list, delimiter = ' ', n_ignore = 1, convert_to_int = 1)
-        else:
-            randomize_matching = self.generateRandomizedSNe(all_sns, rand_sn_data_list, rand_sn_data_dir, randomize_by_survey, randomize_all_sn)
-        if randomize_all:
-            all_sns = self.randomizeAllSN(all_sns, randomize_matching[1])
-        elif randomize_by_survey:
-            all_sns = self.randomizeSNBySurvey(all_sns, randomize_matching[1])
-        return all_sns
-
-
-    def initializeSN(self, z_range, surveys_to_include, surveys_to_ignore, randomized_sn_number = 0, randomize_by_survey = 0, randomize_all = 0):
-
-        #print ('[self.data_set, surveys_to_include, self.sn_data_type, self.pull_extinctions, self.zHD, self.OmM, self.OmL, self.Om0, self.OmR, self.H0] = ' + str([self.data_set, surveys_to_include, self.sn_data_type, self.pull_extinctions, self.zHD, self.OmM, self.OmL, self.Om0, self.OmR, self.H0]))
+        print ('[self.data_set, surveys_to_include, self.sn_data_type, self.pull_extinctions, self.zHD, self.OmM, self.OmL, self.Om0, self.OmR, self.H0] = ' + str([self.data_set, surveys_to_include, self.sn_data_type, self.pull_extinctions, self.zHD, self.OmM, self.OmL, self.Om0, self.OmR, self.H0]))
         all_sns = lsn.loadSN(self.data_set, surveys_to_include, data_type = self.sn_data_type, pull_extinctions = self.pull_extinctions, zHD = self.zHD, OmM = self.OmM, OmL = self.OmL, Om0 = self.Om0, OmR = self.OmR, H0 = self.H0, )
-        print ('randomized_sn_number = ' + str(randomized_sn_number ))
-        if randomized_sn_number > 0:
-            print ('Loading randomize SNe... ')
-            all_sns = self.loadRandomizedSN(all_sns, surveys_to_include, randomized_sn_number, randomize_by_survey, randomize_all_sn)
-
+        #f, axarr = plt.subplots(2,1, figsize = (12, 6))
+        #axarr[0].scatter([sn['z'] for sn in all_sns], [sn['muDiff'] for sn in all_sns], color = [sn['color'] for sn in all_sns])
+        #axarr[0].errorbar([sn['z'] for sn in all_sns], [sn['muDiff'] for sn in all_sns], yerr = [sn['muErr'] for sn in all_sns], fmt = 'none', ecolor = [sn['color'] for sn in all_sns])
+        if randomize_all:
+            all_sns = self.randomizeAllSN(all_sns)
+        elif randomize_by_survey:
+            all_sns = self.randomizeSNBySurvey(all_sns )
+        #axarr[1].scatter([sn['z'] for sn in all_sns], [sn['muDiff'] for sn in all_sns], color = [sn['color'] for sn in all_sns])
+        #axarr[1].errorbar([sn['z'] for sn in all_sns], [sn['muDiff'] for sn in all_sns], yerr = [sn['muErr'] for sn in all_sns], fmt = 'none', ecolor = [sn['color'] for sn in all_sns])
+        #plt.show()
         if surveys_to_include[0] == 'all':
             surveys_to_include = [sn['survey'] for sn in all_sns]
             surveys_to_include = list(set(surveys_to_include))
@@ -1237,15 +1280,18 @@ class PanStarsFieldManager:
         self.surveys_to_ignore = surveys_to_ignore
         all_sns = [sn for sn in all_sns if not(sn['survey'] in self.surveys_to_ignore)]
         all_sns = [sn for sn in all_sns if (sn['z'] >= z_range[0] and sn['z'] <= z_range[1]) ]
+        all_zs = [sn['z'] for sn in all_sns]
+        all_RAs = [sn['RA'] for sn in all_sns]
+        all_Decs = [sn['Dec'] for sn in all_sns]
+        all_surveys = [sn['survey'] for sn in all_sns]
         self.all_sns = all_sns
-        self.all_zs = [sn['z'] for sn in all_sns]
-        self.all_RAs = [sn['RA'] for sn in all_sns]
-        self.all_Decs = [sn['Dec'] for sn in all_sns]
+        self.all_zs = all_zs
+        self.all_RAs = all_RAs
+        self.all_Decs = all_Decs
         self.all_mus = [sn['mu'] for sn in all_sns]
-        print ('self.all_mus[0:10] = ' + str(self.all_mus[0:10]))
         self.all_mu_errs = [sn['muErr'] for sn in all_sns]
         self.all_plot_colors = [sn['color'] for sn in all_sns]
-        self.all_surveys = [sn['survey'] for sn in all_sns]
+        self.all_surveys = all_surveys
         self.survey_to_color_dict = {self.all_surveys[i]:self.all_plot_colors[i] for i in range(len(self.all_surveys))}
         self.min_z, self.max_z = [np.min(self.all_zs), np.max(self.all_zs)]
         return 1
@@ -1285,12 +1331,12 @@ class PanStarsFieldManager:
             self.archive = PSArch
         self.fields = self.archive.fields
         self.field_centers = self.archive.field_centers
-        #print('self.fields = ' + str(self.fields))
+        print('self.fields = ' + str(self.fields))
 
-        #print ('self.surveys_to_include = ' + str(self.surveys_to_include ) )
+        print ('self.surveys_to_include = ' + str(self.surveys_to_include ) )
         self.sn_by_survey = [[sn for sn in self.all_sns if sn['survey'] == survey] for survey in self.surveys_to_include if len([sn for sn in self.all_sns if sn['survey'] == survey]) > 0]
         self.included_surveys = [sn_by_single_survey[0]['survey'] for sn_by_single_survey in self.sn_by_survey]
-        #print ('self.included_surveys = ' + str(self.included_surveys ))
+        print ('self.included_surveys = ' + str(self.included_surveys ))
         #print ('sn_by_survey = '  +str(sn_by_survey))
         colors = [sn_set[0]['color'] for sn_set in self.sn_by_survey]
 
@@ -1331,7 +1377,7 @@ class PanStarsFieldManager:
             all_zs = can.flattenListOfLists(all_zs_in_field_by_survey)
             all_muResids = can.flattenListOfLists(all_muResids_in_field_by_survey)
             all_muErrs = can.flattenListOfLists(all_muErrs_in_field_by_survey)
-            MCMC_fit_funct = lambda params: self.computeRChiSqr(all_zs, all_muResids, all_muErrs, field_center, params)
+            MCMC_fit_funct = lambda params: self.computeRChiSqr(all_zs, all_muResids, all_muErrs, params)
             new_MCMC_fitter = mcmc.MCMCFitter(MCMC_fit_funct, mcmc_start_params, mcmc_step_sizes, n_mcmc_steps, bounds = self.bounds, likelihood_from_chisqr  = 1)
             null_chi_sqr = MCMC_fit_funct(self.null_params)
             MCMC_fitters_by_field [field_num] = {'fit':new_MCMC_fitter, 'null_chi_square': null_chi_sqr}
@@ -1349,18 +1395,13 @@ class PanStarsFieldManager:
         if chi_sqr_prob > 0.0:
             log_prob = np.log10(chi_sqr_prob)
         else:
-            #fitted_resids = self.muDiff_of_z_funct(all_zs, all_RAs, all_Decs, all_zs, all_RAs, all_Decs, all_muResids, all_muErrs, field_center, params)
-            #print ('(np.array(fitted_resids) - np.array(all_muResids)).tolist() = ' + str((np.array(fitted_resids) - np.array(all_muResids)).tolist()))
-            #chi_sqr = np.sum(((np.array(fitted_resids)) - np.array(all_muResids)) ** 2.0 / (np.array(all_muErrs) ** 2.0))
-            #print ('calculated chi_sqr = ' + str(chi_sqr))
-            #print ('[dof, rchi_sqr, chi_sqr_prob] = ' + str([dof, rchi_sqr, chi_sqr_prob]))
             #log_prob = -np.inf
             log_prob = self.low_log_prob_val
         if print_params: print ('[dof, rchi_sqr, chi_sqr_prob, log_prob] = ' + str([dof, rchi_sqr, chi_sqr_prob, log_prob] ))
         #print ('[chi_sqr, chi_sqr_prob, log_prob] = ' + str([chi_sqr, chi_sqr_prob, log_prob]))
         #print ('params = ' + str(params) + ' => log_prob = ' + str(log_prob))
         #print ('log_prob = ' + str(log_prob))
-        return rchi_sqr, log_prob
+        return log_prob
 
     #This is the cumulative density function
     #def computeGalDensProb(self, targ_z, targ_RA, targ_Dec, inner_comoving_rad, annulus_inner_comoving_rad = None, annulus_outer_comoving_rad = None):
@@ -1384,12 +1425,10 @@ class PanStarsFieldManager:
 
         return n_gal_density, np.log10(n_gal_density_err), np.log10(normal_gal_dens_prob)
 
-    def overall_log_prob_funct(self, all_zs, all_RAs, all_Decs, all_muResids, all_muErrs, field_center, ext_params, print_params = 1, gal_dens_weight = 0, n_model_params = None, null_r_chi_sqr = None, minimize_chi_sqr_ratio = 0) :
-
+    def overall_log_prob_funct(self, all_zs, all_RAs, all_Decs, all_muResids, all_muErrs, field_center, ext_params, print_params = 1, gal_dens_weight = 0, n_model_params = None) :
         if n_model_params is None:
             n_model_params = self.n_fit_params
-        sne_rchi_sqr, sne_fit = self.computeChiSqrProb(all_zs, all_RAs, all_Decs, all_muResids, all_muErrs, field_center, n_model_params, ext_params, print_params = print_params)
-        sne_fit = sne_fit * (1.0 - gal_dens_weight)
+        sne_fit = self.computeChiSqrProb(all_zs, all_RAs, all_Decs, all_muResids, all_muErrs, field_center, n_model_params, ext_params, print_params = print_params) * (1.0 - gal_dens_weight)
         #print ('sne_prob = ' + str(sne_prob))
         #gal_dens_prob = self.computeGalDensProb(ext_params[0], ext_params[2] + field_center[0], ext_params[3] + field_center[1], ext_params[4])
         sphere_center = [(ext_params[2] + field_center[0]), (ext_params[3] + field_center[1])]
@@ -1417,10 +1456,7 @@ class PanStarsFieldManager:
         #overall_prob = sne_probf
         if print_params:
             print ('[ext_params, sne_fit, gal_dens_fit, overall_fit] = ' + str([list(ext_params), sne_fit, gal_dens_fit, overall_fit]))
-        if minimize_chi_sqr_ratio and null_r_chi_sqr != None:
-            return -np.log10(sne_rchi_sqr / null_chi_sqr)
-        else:
-            return overall_fit
+        return overall_fit
 
     def mcmc_prior_funct(self, params, print_params = 0):
         if np.all([params[i] > self.bounds[i][0] and params[i] < self.bounds[i][1] for i in range(len(params))]):
@@ -1462,20 +1498,16 @@ class PanStarsFieldManager:
         if bounds != None:
             penalty = penalty - np.sum([-1 + np.exp(abs(min(0, params[i] - bounds[i][0])) * penalization_scaling_from_params[i])
                                 -1 + np.exp(abs(max(0, params[i] - bounds[i][1])) * penalization_scaling_from_params[i]) for i in range(len(params))] )
-        if penalty < -10:
-            penalty = -np.inf
-        else:
-            penalty = -10.0 ** (-penalty)
+        penalty = -10.0 ** (-penalty)
         val = val + penalty
         #print ('[params] = ' + str(params) + ' => vals = ' + str(val))
         return val
 
     def doMCMCFitNearParams(self, fit_funct, center, bounds = None,
-                            mcmc_step_size = 1e-5,
                             n_mcmc_chains = 5, n_mcmc_steps = None, seed_scaling = 10.0 ** -4.0,
                             burn_in_frac = 0.25, thinning = 5, corner_plot_labels = None,
                             penalization_dist_from_params = None, penalization_scaling_from_params = None,
-                            show_mcmc = 1, mcmc_corner_save_file_name = 'MCMC_corner_plot.pdf', mcmc_chains_save_file_name = 'MCMC_chains_plot.pdf' ):
+                            show_mcmc = 1, mcmc_save_file_name = 'MCMC_corner_plot.pdf' ):
         """
         Do an MCMC minimization (using emcee) near an initial point.  Ideally, this is the
             reined minimization after a crude, grid based minimization has already been
@@ -1491,51 +1523,34 @@ class PanStarsFieldManager:
         loaded_funct_for_mcmc = lambda params: self.functToMinimizeMCMC(params, fit_funct, center = center, penalization_dist_from_params = penalization_dist_from_params, penalization_scaling_from_params = penalization_scaling_from_params)
         pos = center + seed_scaling * np.random.randn(n_mcmc_chains, n_params)
         nwalkers, ndim = pos.shape
-        self.mcmc_sampler = emcee.EnsembleSampler(nwalkers, ndim, loaded_funct_for_mcmc, moves=[
-        (emcee.moves.GaussianMove(mcmc_step_size), 1.0),
-    ], )
+        self.mcmc_sampler = emcee.EnsembleSampler(nwalkers, ndim, loaded_funct_for_mcmc, args=())
         self.mcmc_sampler.run_mcmc(pos, n_mcmc_steps, progress = True)
         print ('burn_in_frac, n_mcmc_steps = ' + str([burn_in_frac, n_mcmc_steps ]))
-        samples = self.mcmc_sampler.get_chain(discard = int(burn_in_frac * n_mcmc_steps), thin = thinning, flat = False)
-        print ('np.shape(samples) = ' + str(np.shape(samples)))
         flat_samples = self.mcmc_sampler.get_chain(discard = int(burn_in_frac * n_mcmc_steps), thin = thinning, flat = True)
         param_medians = [np.percentile(flat_samples[:, i], [50])[0] for i in range(n_params)]
-        print ('param_medians = ' + str(param_medians))
-        fit = {'x':param_medians, 'fun':fit_funct(np.array(param_medians))}
-        print ('fit = ' + str(fit))
+        fit = {'x':param_medians, 'fun':fit_funct(param_medians)}
         if show_mcmc:
             fig_corner = corner.corner( flat_samples, truths = param_medians, labels = corner_plot_labels)
-            plt.savefig(self.mcmc_plot_save_dir + mcmc_corner_save_file_name)
-            plt.close('all')
-            f, axarr = plt.subplots(ndim,1)
-            for i in range(ndim):
-                ax = axarr[i]
-                ax.plot(samples[:,:,i], c = 'k', alpha = 0.3)
-                ax.set_xlim(0, len(samples))
-                ax.set_ylabel(corner_plot_labels[i])
-                ax.yaxis.set_label_coords(-0.1, 0.5)
-            axarr[-1].set_xlabel('step number')
-            plt.savefig(self.mcmc_plot_save_dir + mcmc_chains_save_file_name)
+            plt.savefig(self.mcmc_plot_save_dir + mcmc_save_file_name)
             plt.close('all')
         return fit
 
     def doStaticFitOnSNeSubset(self, central_coord, nearby_sn_indeces,
-                             method = 'mcmc', init_guess = None, bounds = None, one_d_fit = 0, n_grid_samples = None, null_param_vals = [0.0, 2.0], print_params = 0,
-                             show_coarse_fit = 0):
+                             method = 'mcmc', init_guess = None, bounds = None, one_d_fit = 0, n_grid_samples = None, null_param_vals = [0.0, 2.0], print_params = 0):
         '''
         Fit a cosmic over/under density to a subset of SNe, given with a set of indeces.
             The fit keeps the location of the overdensity fixed, changing only its
             fundumental parameters (size and mass, for example).
         '''
         if bounds == None:
-            bounds = self.bounds
-        if init_guess == None:
-            init_guess = self.param_init_guess
-        central_RA, central_Dec = central_coord[1:]
-        #print ('[init_guess, bounds, n_grid_samples] = ' + str([init_guess, bounds, n_grid_samples]))
+            bounds = self.bounds[1]
+        print ('[init_guess, bounds, n_grid_samples] = ' + str([init_guess, bounds, n_grid_samples]))
         fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, fitting_surveys = [[arr[i] for i in nearby_sn_indeces] for arr in [self.all_zs, self.all_RAs, self.all_Decs, self.all_muResids, self.all_mu_errs, self.all_surveys]]
+        RA_offset_to_center = (180.0 - central_coord[1])
+        fitting_RAs = self.centerRAs(fitting_RAs,  RA_offset_to_center )
+        central_RA, central_Dec = [self.centerRAs([central_coord[1]],  RA_offset_to_center )[0],  central_coord[2]]
         #Are we running a minimization algorithm or an emcee?  The determines if we want the - here or not
-        fit_funct_no_gal_dens = lambda params: -self.overall_log_prob_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], [central_coord[0], 0.0, 0.0, params[0], params[1]], print_params = print_params, gal_dens_weight = 0.0)
+        fit_funct_no_gal_dens = lambda params: -self.overall_log_prob_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], [central_coord[0], params[0], params[1], 0.0, 0.0], print_params = print_params, gal_dens_weight = 0.0)
 
         if one_d_fit:
             min_res = optimize.minimize_scalar(fit_funct_no_gal_dens, bounds = bounds)
@@ -1550,19 +1565,10 @@ class PanStarsFieldManager:
                 fits_on_grid = [[] for param in full_param_points]
                 for i in range(len(full_param_points)):
                     params = full_param_points[i]
-                    #print ('params = ' + str(params))
                     fits_on_grid[i] = fit_funct_no_gal_dens(params)
                     if not(print_params): print('\r' + 'Doing coarse (pre-mcmc) fit: ' + str( can.round_to_n(i / len(full_param_points) * 100, 2)) + '% done...', sep=' ', end='', flush=True)
                 #fits_on_grid = [fit_funct_no_gal_dens(params) for params in full_param_points]
                 fits_on_grid = np.transpose(np.reshape(fits_on_grid, n_grid_samples))
-                if show_coarse_fit:
-                    x_mesh = np.transpose(np.reshape([param_point[0] for param_point in full_param_points], n_grid_samples))
-                    y_mesh = np.transpose(np.reshape([param_point[1] for param_point in full_param_points], n_grid_samples))
-                    fig1, ax2 = plt.subplots(constrained_layout = True)
-                    CS = ax2.contourf(y_mesh, x_mesh, fits_on_grid)
-                    cbar = fig1.colorbar(CS)
-                    plt.savefig(self.plot_save_dir + 'coarse_fits_on_grid.pdf')
-                    plt.show()
                 #Are we running a minimization algorithm or an emcee?  The determines if we want the max or the min
                 grid_best_fit_coord = can.niceReverse(list(can.find2DMin(fits_on_grid) ) )
                 grid_best_fit_params = [param_arrs[i][grid_best_fit_coord[i]] for i in range(n_params)]
@@ -1570,12 +1576,9 @@ class PanStarsFieldManager:
             print ('init_guess = ' + str(init_guess))
             if method.lower() == 'mcmc':
                 #I we run the emcee, we need to add a - sign to the fit, since the mcmc function maximizes, rather than minimizing.
-                min_res = self.doMCMCFitNearParams(lambda params: -fit_funct_no_gal_dens(params), init_guess, bounds = bounds, penalization_dist_from_params = [100, 1.0], penalization_scaling_from_params = [1.0, 1.0], corner_plot_labels = [ r"$\delta_0$", r"$ \log_{10}$" + ' ' + r"$(r_c $" +' Mpc' + r"$^{-1})$"],
-                                                   mcmc_corner_save_file_name = 'MCMC_corner_plot_' + '_'.join([ ['z', 'RA','Dec'][i] + str(can.round_to_n(central_coord[i], 3)) for i in range(len(central_coord)) ]) + '.pdf',
-                                                   mcmc_chains_save_file_name = 'MCMC_chains_plot_' + '_'.join([ ['z', 'RA','Dec'][i] + str(can.round_to_n(central_coord[i], 3)) for i in range(len(central_coord)) ]) + '.pdf')
+                min_res = self.doMCMCFitNearParams(lambda params: -fit_funct_no_gal_dens(params), init_guess, bounds = bounds, penalization_dist_from_params = [100, 1.0], penalization_scaling_from_params = [1.0, 1.0], corner_plot_labels = [ r"$\log_{10}$" + ' ' + r"$(M$ M$_{\cdot}^{-12})$", r"$ \log_{10}$" + ' ' + r"$(r_c $" +' Mpc' + r"$^{-1})$"],
+                                                   mcmc_save_file_name = 'MCMC_corner_plot_' + '_'.join([ ['z', 'RA','Dec'][i] + str(can.round_to_n(central_coord[i], 3)) for i in range(len(central_coord)) ]) + '.pdf')
                 min_res['fun'] = -min_res['fun']
-            elif method.lower() == 'grid':
-                min_res = {'x':init_guess, 'fun':fit_funct_no_gal_dens(init_guess)}
             else:
                 min_res = optimize.minimize(fit_funct_no_gal_dens, init_guess, bounds = bounds, method = method  )
             for i in range(len(min_res['x'])):
@@ -1584,62 +1587,16 @@ class PanStarsFieldManager:
         print ('min_res = ' + str(min_res))
         #fitted_resids = self.muDiff_of_z_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], [central_coord[0], min_res['x'][0], min_res['x'][1], 0.0, 0.0], self.fit_funct)
         null_fit_val = fit_funct_no_gal_dens(null_param_vals)
-        fit_r_chi_square = self.computeRChiSqr(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], self.n_fit_params, [central_coord[0], 0.0, 0.0] + min_res['x'], print_params = 0)
+        fit_r_chi_square = self.computeRChiSqr(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], self.n_fit_params, [central_coord[0], min_res['x'][0], min_res['x'][1], 0.0, 0.0], print_params = 0)
         full_r_chi_square = ( np.sum([ self.all_muResids[i] ** 2.0 / self.all_mu_errs[i] ** 2.0 for i in range(len(self.all_zs)) if not (i in nearby_sn_indeces) ]) + fit_r_chi_square * (len(nearby_sn_indeces) - self.n_fit_params)) / (len(self.all_zs) - self.n_fit_params)
-        null_r_chi_square = self.computeRChiSqr(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], self.n_null_fit_params, [central_coord[0], 0.0, 0.0] + null_param_vals, print_params = 0)
-        #full_null_r_chi_square = np.sum([ self.all_muResids[i] ** 2.0 / self.all_mu_errs[i] ** 2.0 for i in range(len(self.all_zs)) ]) / (len(self.all_zs) - 1)
+        null_r_chi_square = self.computeRChiSqr(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], self.n_fit_params, [central_coord[0], null_param_vals[0], null_param_vals[1], 0.0, 0.0], print_params = 0)
+        full_null_r_chi_square = np.sum([ self.all_muResids[i] ** 2.0 / self.all_mu_errs[i] ** 2.0 for i in range(len(self.all_zs)) ]) / (len(self.all_zs) - 1)
         print ('null_fit_val = ' + str(null_fit_val))
         if null_fit_val > 99:
             print ('!!! null_param_vals = ' + str(null_param_vals) + ' at coordinate ' + str(central_coord) + ' yielded null_fit_val = ' + str(null_fit_val) + ' !!!!!')
             print ('Let us redo the calculation...')
             -self.overall_log_prob_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], [central_coord[0], null_param_vals[0], null_param_vals[1], 0.0, 0.0], print_params = 1, gal_dens_weight = 0.0)
-        return min_res, fit_r_chi_square, null_r_chi_square, null_fit_val
-
-    def fullSNeFitFunct(self, params, sky_start, comoving_bin, min_n_sn):
-        central_coord = [params[0], sky_start[0] + params[1] / np.cos(np.deg2rad(sky_start[1] + params[2])), sky_start[1] + params[2]]
-        central_RA, central_Dec = central_coord[1:]
-        #print ('central_coord = ' + str(central_coord))
-        nearby_sn_indeces = self.getSNWithinComovingDistance(central_coord[0], [central_coord[1], central_coord[2]], comoving_bin)
-        #print ('len(nearby_sn_indeces) = ' + str(len(nearby_sn_indeces)) + ' : ' + str(nearby_sn_indeces) )
-        if len(nearby_sn_indeces) < min_n_sn:
-            results = self.low_log_prob_val
-        else:
-            #print ('nearby_sn_indeces = ' + str(nearby_sn_indeces))
-            fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, fitting_surveys = [[arr[i] for i in nearby_sn_indeces] for arr in [self.all_zs, self.all_RAs, self.all_Decs, self.all_muResids, self.all_mu_errs, self.all_surveys]]
-            #RA_offset_to_center = (180.0 - central_coord[1])
-            #fitting_RAs = [ fitting_RAs[j] + (180.0 - fitting_RAs[0]) for j in range(len(fitting_RAs)) ]
-            #fitting_RAs = [RA - 360.0 if RA > 360.0 else RA + 360.0 if RA < 0.0 else RA for RA in fitting_RAs]
-            #fitting_RAs = self.centerRAs(fitting_RAs,  RA_offset_to_center )
-            #central_RA, central_Dec = [self.centerRAs([central_coord[1]],  RA_offset_to_center )[0],  central_coord[2]]
-            #print ('[[central_RA, central_Dec],[fitting_RAs[0], fitting_Decs[0]] ]=  ' + str([[central_RA, central_Dec],[fitting_RAs[0], fitting_Decs[0]] ] ) )
-            results = self.overall_log_prob_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], params, print_params = 0, gal_dens_weight = 0.0)
-            #fit_funct_no_gal_dens = lambda ext_params: -self.overall_log_prob_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], ext_params, print_params = 0, gal_dens_weight = 0.0)
-        #if results <= -100:
-        #    print ('len(nearby_sn_indeces) = ' + str(len(nearby_sn_indeces)) + ' : ' + str(nearby_sn_indeces) )
-        #print ('params: ' + str(params.tolist()) + ' => results: ' + str(results))
-        return results
-
-    def doFullFitAroundPoint(self, start_min_seed, sky_start, comoving_bin, min_n_sn, method = 'mcmc', bounds = None,  mcmc_save_suffix = '', null_param_vals = [0.0, 2.0]):
-        #start_min_seed = [best_fit_point]
-        mcmc_seed_rand_scalings = [0.0001, 0.0001, 0.0001, 0.0001]
-        if method == 'mcmc':
-            #local_fit = self.doMCMCFitNearParams(lambda params: self.fullSNeFitFunct(params, sky_start, comoving_bin, min_n_sn), start_min_seed, bounds = None, penalization_dist_from_params = [np.inf, np.inf, np.inf, 20, 20], penalization_scaling_from_params = [1.0, 1.0, 1.0, 1.0, 1.0],  corner_plot_labels = [r'$z$', r"$\log_{10}$" + ' ' + r"$(M$ M$_{\cdot}^{-12})$", r"$ \log_{10}$" + ' ' + r"$(r_c $" +' Mpc' + r"$^{-1})$" , r'$\Delta$ RA', r'$\Delta$ Dec'])
-            local_fit = self.doMCMCFitNearParams(lambda params: self.fullSNeFitFunct(params, sky_start, comoving_bin, min_n_sn), start_min_seed, bounds = None, penalization_dist_from_params = [np.inf, np.inf, np.inf, 20, 20], penalization_scaling_from_params = [1.0, 1.0, 1.0, 1.0, 1.0],  corner_plot_labels = [r'$z$', r'$\Delta$ RA (deg)', r'$\Delta$ Dec (deg)', r'$\delta_0$', r"$ \log_{10}$" + ' ' + r"$(r_c $" +' Mpc' + r"$^{-1})$" ],mcmc_corner_save_file_name = 'MCMC_corner_plot' + mcmc_save_suffix + '.pdf', mcmc_chains_save_file_name = 'MCMC_chains_plot' + mcmc_save_suffix + '.pdf' )
-            local_fit['fun'] = -local_fit['fun']
-
-        fitted_params = local_fit['x']
-        print ('fitted_params = ' + str(fitted_params))
-        central_coord = [fitted_params[0], sky_start[0] + fitted_params[1] / np.cos(np.deg2rad(sky_start[1] + fitted_params[2])), sky_start[1] + fitted_params[2]]
-        central_RA, central_Dec = central_coord[1:]
-        #print ('central_coord = ' + str(central_coord))
-        nearby_sn_indeces = self.getSNWithinComovingDistance(central_coord[0], [central_coord[1], central_coord[2]], comoving_bin)
-        fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, fitting_surveys = [[arr[i] for i in nearby_sn_indeces] for arr in [self.all_zs, self.all_RAs, self.all_Decs, self.all_muResids, self.all_mu_errs, self.all_surveys]]
-        fit_r_chi_square = self.computeRChiSqr(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], self.n_fit_params, fitted_params, print_params = 0)
-        null_r_chi_square = self.computeRChiSqr(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], self.n_null_fit_params, fitted_params[0:3] + null_param_vals , print_params = 0, )
-
-        #null_fit_val = fit_funct_no_gal_dens(start_min_seed)
-        null_fit_val = -self.overall_log_prob_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], fitted_params[0:3] + [0.0, fitted_params[1]], print_params = 0, gal_dens_weight = 0.0, n_model_params = 0)
-        return local_fit, fit_r_chi_square, null_r_chi_square, null_fit_val
+        return min_res, full_r_chi_square, full_null_r_chi_square, null_fit_val
 
     def doFitOnSNeSubset(self, central_coord, nearby_sn_indeces,
                          method = 'CG', n_mcmc_chains = 8, n_mcmc_steps = 2000, mcmc_seed_rand_scalings = [0.01, 1.0, 1.0, 1.0], comoving_bound = None, start_min_seed = None, null_param_vals = [0.0, 2.0], bounds = None, print_params = 0):
@@ -1666,7 +1623,7 @@ class PanStarsFieldManager:
             local_fit = optimize.minimize(fit_funct_no_gal_dens, start_min_seed, method = method, tol = 10.0 ** -5.0, bounds = local_bounds)
 
         fit_r_chi_square = self.computeRChiSqr(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], self.n_fit_params, [local_fit['x'][0], local_fit['x'][1], local_fit['x'][2], local_fit['x'][3], local_fit['x'][4]], print_params = 0)
-        null_r_chi_square = self.computeRChiSqr(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], self.n_null_fit_params, [local_fit['x'][0], null_param_vals[0], null_param_vals[1], local_fit['x'][3], local_fit['x'][4]], print_params = 0)
+        null_r_chi_square = self.computeRChiSqr(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], self.n_fit_params, [local_fit['x'][0], null_param_vals[0], null_param_vals[1], local_fit['x'][3], local_fit['x'][4]], print_params = 0)
 
         null_fit_val = fit_funct_no_gal_dens(start_min_seed)
         null_fit_val = -self.overall_log_prob_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_muErrs, [central_RA, central_Dec], start_min_seed, print_params = 0, gal_dens_weight = 0.0, n_model_params = 0)
@@ -1687,7 +1644,7 @@ class PanStarsFieldManager:
         RAs_to_plot = self.centerRAs(RAs_to_plot,  RA_offset_to_center )
         muDiffs_to_plot = self.muDiff_of_z_funct(zs_to_plot, RAs_to_plot, Decs_to_plot, fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_mu_errs, [ central_RA, central_Dec], fit_params, self.fit_funct)
         fitted_muDiffs = self.muDiff_of_z_funct(fitting_zs, fitting_RAs, fitting_Decs, fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_mu_errs, [ central_RA, central_Dec], fit_params, self.fit_funct)
-        sne_rchi_sqr, sne_fit = self.computeChiSqrProb(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_mu_errs, [ central_RA, central_Dec], 5, fit_params[0:4], print_params = 0)
+        sne_fit = self.computeChiSqrProb(fitting_zs, fitting_RAs, fitting_Decs, fitting_mu_resids, fitting_mu_errs, [ central_RA, central_Dec], 5, fit_params[0:4], print_params = 0)
         #                self.muDiff_of_z_funct(all_zs, all_RAs, all_Decs, all_zs, all_RAs, all_Decs, all_resids, all_errs, field_center, fit_params, self.fit_funct)
         #fitting_RAs = [RA - RA_offset_to_center for RA in fitting_RAs]
         if ref_axes == None:
@@ -1821,45 +1778,7 @@ class PanStarsFieldManager:
         comoving_sep = self.computeComovingSepsOfCoords(center_coord, ref_coord)
         return comoving_sep
 
-    def downselectComovingGridByOctant(self, cartesian_points, hemisphere, angle_divs, angle_slice):
-        """
-        Pick as seeds only points in only 1 of eight cartesian quadrant.
-            Used to parallellize lengthy fitting procedures. Quadrants
-            because it makes the breaking up of the cartesian grid very easy.
-        """
-        """
-        if search_octant == 1:
-            cartesian_points = [ point for point in cartesian_points if (point[0] >= 0 and point[1] >= 0 and point[2] >= 0) ]
-        elif search_octant == 2:
-            cartesian_points = [ point for point in cartesian_points if (point[0] < 0 and point[1] >= 0 and point[2] >= 0) ]
-        elif search_octant == 3:
-            cartesian_points = [ point for point in cartesian_points if (point[0] < 0 and point[1] < 0 and point[2] >= 0) ]
-        elif search_octant == 4:
-            cartesian_points = [ point for point in cartesian_points if (point[0] >= 0 and point[1] < 0 and point[2] >= 0) ]
-        elif search_octant == 5:
-            cartesian_points = [ point for point in cartesian_points if (point[0] >= 0 and point[1] < 0 and point[2] < 0) ]
-        elif search_octant == 6:
-            cartesian_points = [ point for point in cartesian_points if (point[0] < 0 and point[1] < 0 and point[2] < 0) ]
-        elif search_octant == 7:
-            cartesian_points = [ point for point in cartesian_points if (point[0] < 0 and point[1] >= 0 and point[2] < 0) ]
-        elif search_octant == 8:
-            cartesian_points = [ point for point in cartesian_points if (point[0] >= 0 and point[1] >= 0 and point[2] < 0) ]
-        """
-        if hemisphere == 0:
-            cartesian_points = [point for point in cartesian_points if point[2] >= 0 ]
-        elif hemisphere == 1:
-            cartesian_points = [point for point in cartesian_points if point[2] < 0 ]
-        angles = [(np.arctan2(point[0], point[1]) + np.pi) % (2.0 * np.pi) for point in cartesian_points]
-        slice_size = 2.0 * np.pi / angle_divs
-        #print ('angles = ' + str(angles))
-        #print ('slice_size = ' + str(slice_size))
-
-        cartesian_points = [cartesian_points[i] for i in range(len(cartesian_points)) if (angles[i] >= slice_size * (angle_slice - 1) and angles[i] < slice_size * angle_slice) ]
-
-        return cartesian_points
-
-
-    def determineComovingGrid(self, comoving_grid_sep_Mpc = 100, z_lims = None, hemisphere = 'both', angle_divs = 1, angle_slice = 1 ):
+    def determineComovingGrid(self, comoving_grid_sep_Mpc = 100, z_lims = None):
         """
         Make a cartesian grid of points in comoving space, returning those that lie within a spherical
             annulus of minimum/maximum redshift radius.
@@ -1867,25 +1786,12 @@ class PanStarsFieldManager:
         """
         if z_lims == None:
             z_lims = self.z_range
-        if hemisphere == None:
-            hemisphere = self.hemisphere
-        if angle_divs == None:
-            angle_divs = self.angle_divs
-        if angle_slice == None:
-            angle_slice = self.angle_slice
-        #if search_octant == None:
-        #    search_octant = self.search_octant
         r_lims = [self.r_of_z_interp(z_lims[0]), self.r_of_z_interp(z_lims[1])]
-        print ('r_lims = ' + str(r_lims))
-        #one_d_comoving_axis = np.arange(r_lims[0] + comoving_grid_sep_Mpc * 0.1, r_lims[1], comoving_grid_sep_Mpc )
-        one_d_comoving_axis = np.arange(0.0, r_lims[1], comoving_grid_sep_Mpc )
-        one_d_comoving_axis = [elem for elem in one_d_comoving_axis if (elem > r_lims[0] and elem < r_lims[1])]
-        one_d_comoving_axis = can.niceReverse([-elem for elem in one_d_comoving_axis]) + one_d_comoving_axis
+        one_d_comoving_axis = np.arange(r_lims[0] + comoving_grid_sep_Mpc / 2, r_lims[1], comoving_grid_sep_Mpc )
+        one_d_comoving_axis = can.niceReverse((-one_d_comoving_axis).tolist()) + one_d_comoving_axis.tolist()
         cartesian_points = can.flattenListOfLists(can.flattenListOfLists([[[[x,y,z] for x in one_d_comoving_axis] for y in one_d_comoving_axis] for z in one_d_comoving_axis]))
         cartesian_points = [point for point in cartesian_points if (point[0] ** 2.0 + point[1] ** 2.0 + point[2] ** 2.0 > r_lims[0] ** 2.0) and (point[0] ** 2.0 + point[1] ** 2.0 + point[2] ** 2.0 < r_lims[1] ** 2.0)]
-        cartesian_points = self.downselectComovingGridByOctant(cartesian_points, hemisphere, angle_divs, angle_slice)
         rs = [(np.sqrt(point[0] ** 2.0 + point[1] ** 2.0 + point[2] ** 2.0)) for point in cartesian_points]
-
         xs, ys, zs_cart = [[point[0] for point in cartesian_points], [point[1] for point in cartesian_points], [point[2] for point in cartesian_points]]
         Rs = [(np.sqrt(point[0] ** 2.0 + point[1] ** 2.0)) for point in cartesian_points]
         thetas = [math.atan2(Rs[i], zs_cart[i]) for i in range(len(Rs))]
@@ -1901,19 +1807,11 @@ class PanStarsFieldManager:
         nearby_sn_indeces = [ i for i in range(len(comoving_dists)) if comoving_dists[i] < max_comoving_dist ]
         return nearby_sn_indeces
 
-    def doSingleFitAroundCoord(self, seed_redshift, shell_coord, min_n_sn, angular_scale = None, comoving_bin = None, comoving_bound = None, init_guess = None, bounds = None, n_grid_samples = None, method = 'mcmc', one_d_fit = 0, print_params = 0, show_coarse_fit = 0):
-        if comoving_bin == None:
-            if angular_scale == None:
-                angular_scale = self.binning_angular_scale
-            comoving_bin = self.getComovingCrossSectionOfAngularScaleAtRedshift(seed_redshift, angular_scale)
-        seed_comoving = self.r_of_z_interp(seed_redshift)
-        #print ('[comoving_bin, seed_comoving] = ' + str([comoving_bin, seed_comoving] ))
-        comoving_bin = min([comoving_bin, seed_comoving]) #Don't sweep up SNe that are on the other side of us as observers; that complicates the analysis.
-        #print ('comoving_bing = ' + str(comoving_bin))
+    def doSingleFitAroundCoord(self, seed_redshift, shell_coord, comoving_bin, min_n_sn, comoving_bound = None, init_guess = None, bounds = None, n_grid_samples = None, method = 'mcmc', one_d_fit = 0, print_params = 0):
         nearby_sn_indeces = self.getSNWithinComovingDistance(seed_redshift, shell_coord, comoving_bin)
         if len(nearby_sn_indeces) >= min_n_sn:
             print ( 'Within ' + str(comoving_bin) + ' Mpc of the coordinate: ' + str([seed_redshift] + shell_coord) + ', we have the following ' + str(len(nearby_sn_indeces)) + ' sn ' + str(nearby_sn_indeces) )
-            fit_around_coord, full_r_chi_square, full_null_r_chi_square, null_prob = self.doStaticFitOnSNeSubset([seed_redshift] + shell_coord, nearby_sn_indeces, one_d_fit = one_d_fit, init_guess = init_guess, bounds = bounds, method = method, n_grid_samples = n_grid_samples, print_params = print_params, show_coarse_fit = show_coarse_fit)
+            fit_around_coord, full_r_chi_square, full_null_r_chi_square, null_prob = self.doStaticFitOnSNeSubset([seed_redshift] + shell_coord, nearby_sn_indeces, one_d_fit = one_d_fit, init_guess = init_guess, bounds = bounds, method = method, n_grid_samples = n_grid_samples, print_params = print_params)
             fit_param, fit_prob = [fit_around_coord['x'], fit_around_coord['fun']]
             prob_improvement = self.computeProbImprovement( -fit_prob , -null_prob)
             print ('[seed_redshift, shell_coord] = ' + str([seed_redshift, shell_coord]))
@@ -1992,7 +1890,7 @@ class PanStarsFieldManager:
         self.sky_fits = flat_sky_fits
         if save_fits:
             if save_fits_file_name == None:
-                save_fits_file_name = 'PantheonSkyGridFits_Randomize' + str(self.randomize_all) + '_ComovSep' + str(grid_sep_comoving) + '_ComovBin' + str(comoving_bin) + '_MinSNe' + str(min_n_sn) + '_RedshiftEdges' + str(redshift_edges[0]) + '_' + str(redshift_edges[1]) +  '_RAEdges' + str(coord_edges[0][0]) + '_' + str(coord_edges[0][1]) + '_DecEdges' + str(coord_edges[1][0]) + '_' + str(coord_edges[1][1]) + '.txt'
+                save_fits_file_name = 'PantheonSkyGridFits_Randomize' + str(self.randomize) + '_ComovSep' + str(grid_sep_comoving) + '_ComovBin' + str(comoving_bin) + '_MinSNe' + str(min_n_sn) + '_RedshiftEdges' + str(redshift_edges[0]) + '_' + str(redshift_edges[1]) +  '_RAEdges' + str(coord_edges[0][0]) + '_' + str(coord_edges[0][1]) + '_DecEdges' + str(coord_edges[1][0]) + '_' + str(coord_edges[1][1]) + '.txt'
             self.saveSkyFits(save_fits_file_name, save_dir = save_dir, fits_to_save = self.sky_fits,
                            sky_fit_super_params = [grid_sep_comoving, comoving_bin, min_n_sn, redshift_edges, coord_edges ],
                            sky_fit_super_param_strs = ['grid_sep_comoving', 'comoving_bin', 'min_n_sn', 'redshift_edges', 'coord_edges' ])
@@ -2348,23 +2246,7 @@ class PanStarsFieldManager:
         comoving_sep = self.computeComovingSepsOfCoords([zs[0], RAs[0], Decs[0]], [zs[1], RAs[1], Decs[1]])
         return comoving_sep
 
-    def determineMinimumSpacingComovingBinningByNSNe(self, min_n_sn, verbose = 1):
-        all_pairs = can.flattenListOfLists([ [(i, j) for j in range(i+1, len(self.all_sns)) ] for i in range(len(self.all_sns)) ])
-        comoving_seps_by_pairs = {}
-        if verbose:
-            print ('Computing comoving sep between all SNe pairs...')
-        for i in range(len(all_pairs)):
-           if i % 1000 == 999 and verbose: print('\r' + str( can.round_to_n(i / len(all_pairs) * 100, 3)) + '% done...', sep=' ', end='', flush=True)
-           pair = all_pairs[i]
-           coord1 = [self.all_zs[pair[0]], self.all_RAs[pair[0]], self.all_Decs[pair[0]]]
-           coord2 = [self.all_zs[pair[1]], self.all_RAs[pair[1]], self.all_Decs[pair[1]]]
-           comoving_seps_by_pairs[pair] = self.computeComovingSepsOfCoords(coord1, coord2)
-        if verbose:
-            print ('Done computing comoving sep between all SNe pairs!')
-        tightest_cluster = can.findTightestGroupingFromPairs(comoving_seps_by_pairs, min_n_sn )
-        return tightest_cluster[1]
-
-    def doFitsOnGrid(self, fit_comoving_density, min_n_sn, z_range = None, angular_scale = None, comoving_bin = None, one_d_fit = 0, init_guess = None, bounds = None, n_grid_samples = None, hemisphere = None, angle_divs = None, angle_slice = None ):
+    def doFitsOnGrid(self, fit_comoving_density, min_n_sn, z_range = None, comoving_bin = None, one_d_fit = 0, init_guess = None, bounds = None, n_grid_samples = None):
         """
         Do a fit in one dimension (over/under density mass) at a grid of points
             in comoving space.  The three passable paramters are: the density with
@@ -2375,31 +2257,18 @@ class PanStarsFieldManager:
         The fits done at each grid location are performed only if some minimum
             number of SNe are sufficiently close to that seed location.
         """
-        if angular_scale == None:
-            angular_scale = self.binning_angular_scale
-        if init_guess == None:
-            init_guess = self.param_init_guess
-        if bounds == None:
-            bounds = self.bounds
-        if hemisphere == None:
-            hemisphere = self.hemisphere
-        if angle_divs == None:
-            angle_divs = self.angle_divs
-        if angle_slice == None:
-            angle_slice = self.angle_slice
-        #if search_octant == None:
-        #    search_octant = self.search_octant
-        spherical_points = self.determineComovingGrid(comoving_grid_sep_Mpc = fit_comoving_density, z_lims = z_range, hemisphere = hemisphere, angle_divs = angle_divs, angle_slice = angle_slice)
-        #print ('spherical_points = ' + str(spherical_points))
+        if comoving_bin == None:
+            comoving_bin = self.cutoff_radius
+        spherical_points = self.determineComovingGrid(comoving_grid_sep_Mpc = fit_comoving_density, z_lims = z_range)
         fits = [None for i in spherical_points]
         #print ('spherical_points = ' + str(spherical_points) )
         start_time = time.time()
         prev_time = time.time()
         for i in range(len(spherical_points)):
             spherical_point = spherical_points[i]
-            fits[i] = self.doSingleFitAroundCoord(spherical_point[0], spherical_point[1:], min_n_sn, angular_scale = angular_scale, comoving_bin = comoving_bin, one_d_fit = one_d_fit, init_guess = init_guess, bounds = bounds, n_grid_samples = n_grid_samples, method = 'mcmc')
+            fits[i] = self.doSingleFitAroundCoord(spherical_point[0], spherical_point[1:], comoving_bin, min_n_sn, one_d_fit = one_d_fit, init_guess = init_guess, bounds = bounds, n_grid_samples = n_grid_samples, method = 'mcmc')
             curr_time = time.time()
-            if i % 100 == 100 - 1:
+            if i % 1000 == 1000 - 1:
                 n_past = i + 1
                 n_to_go = len(spherical_points) - n_past
                 delta_t = curr_time - start_time
@@ -2415,37 +2284,30 @@ class PanStarsFieldManager:
         good_fit_indeces = [i for i in range(len(fits)) if fits[i] != None]
         cols_to_save = [ [fitted_points[i][0] for i in good_fit_indeces],
                          [fitted_points[i][1] for i in good_fit_indeces],
-                         [fitted_points[i][2] for i in good_fit_indeces]]
-        n_good_fits = len(cols_to_save[0])
-        print ('fits = ' + str(fits))
-        print ('n_good_fits = ' + str(n_good_fits))
-        if n_good_fits > 0:
-            n_fit_params = len(fits[good_fit_indeces[0]][0])
-        else:
-            n_fit_params = 0
-        cols_to_save = cols_to_save + [ [fits[i][0][j] for i in good_fit_indeces ] for j in range(n_fit_params ) ]
-        cols_to_save = cols_to_save + [ [fits[i][1] for i in good_fit_indeces],
-                                        [fits[i][2] for i in good_fit_indeces],
-                                        [fits[i][3] for i in good_fit_indeces] ]
+                         [fitted_points[i][2] for i in good_fit_indeces],
+                         [fits[i][0][0] for i in good_fit_indeces],
+                         [fits[i][0][1] for i in good_fit_indeces],
+                         [fits[i][1] for i in good_fit_indeces],
+                         [fits[i][2] for i in good_fit_indeces],
+                         [fits[i][3] for i in good_fit_indeces] ]
         results_dir = self.dir_archive.getFieldFitsDir()
         can.saveListsToColumns(cols_to_save, save_file, results_dir, header = header, sep = ', ')
         return 1
 
     def makePlotOfOneDFits(self, fitted_points_spher_coords, fits, fig_size_unit = 0.5, n_fits_x = 6, n_fits_y = 2,
-                           legend_fontsize = 7, ticksize = 8, labelsize = 10, comoving_bin = None, angular_scale = None, show = 0,
-                           save_plot_prefix = '', threeD_plot_suffix = '_FitsIn3Sky.pdf', gridspec_density_plot_suffix = '_BestDensityFits.pdf', vel_plot_density_plot_suffix = '_BestDensityVelocities.pdf',
-                           hist_of_fits = '_HistOfFitImprovements.pdf', vel_lim_min = 0.0005):
+                           legend_fontsize = 7, ticksize = 8, labelsize = 10, comoving_bin = None, show = 0,
+                           save_plot_prefix = '', threeD_plot_suffix = '_FitsIn3Sky.pdf', gridspec_density_plot_suffix = '_BestDensityFits.pdf', hist_of_fits = '_HistOfFitImprovements.pdf'):
         """
         Take a series of fits run on a comoving grid in 3D and show the best
             n_good_fits_to_show of those fits.  In the center of these plots,
             we show the distribution of SNe on the sky.
         """
-        print ('len(fitted_points_spher_coords) = ' + str(len(fitted_points_spher_coords))) 
         if comoving_bin == None:
-            if angular_scale == None:
-                angular_scale = self.binning_angular_scale
+            comoving_bin = self.cutoff_radius
         plot_dir = self.dir_archive.getPlotDirectory()
+        print ('fits = ' + str(fits))
         good_indeces  = [i for i in range(len(fitted_points_spher_coords)) if fits[i] != None]
+        print ('good_indeces = ' + str(good_indeces))
         fitted_points = [fitted_points_spher_coords[i] for i in good_indeces]
         fitted_param_vals = [fits[i][0] for i in good_indeces]
         fitted_r_chi_squares = [fits[i][1] for i in good_indeces]
@@ -2459,12 +2321,15 @@ class PanStarsFieldManager:
         ordered_null_chi_squares = can.niceReverse( ordered_null_chi_squares)
         ordered_improvements = can.niceReverse(ordered_improvements)
         """
-        print ('Where do we get caught up?')
         ordered_points, ordered_param_vals, ordered_r_chi_squares, ordered_null_chi_squares, ordered_improvements = can.safeSortOneListByAnother(fitted_r_chi_squares, [fitted_points, fitted_param_vals, fitted_r_chi_squares, fitted_null_chi_squares, fitted_improvements])
-        print ('Sorted points.')
 
-        nearby_sn_indeces = [self.getSNWithinComovingDistance(ordered_points[i][0], ordered_points[i][1:], (self.getComovingCrossSectionOfAngularScaleAtRedshift(ordered_points[i][0], angular_scale) if comoving_bin == None else comoving_bin)) for i in range(len(ordered_points))]
-        print ('Identified neary SNe indeces')
+        print ('ordered_points = ' + str(ordered_points))
+        nearby_sn_indeces = [self.getSNWithinComovingDistance(ordered_points[i][0], ordered_points[i][1:], comoving_bin) for i in range(len(ordered_points))]
+        print ('ordered_points = ' + str(ordered_points))
+        print ('ordered_r_chi_squares = ' + str(ordered_r_chi_squares))
+        print ('ordered_null_chi_squares = ' + str(ordered_null_chi_squares))
+        print ('ordered_param_vals = ' + str(ordered_param_vals))
+        print ('ordered_improvements = ' + str(ordered_improvements))
         deg_to_rad = self.astro_arch.getDegToRad()
         cart_points = [point[0] * np.array([np.cos(point[1] * deg_to_rad ) * np.sin((90.0 - point[2]) * deg_to_rad ), np.sin(point[1] * deg_to_rad ) * np.sin((90.0 - point[2]) * deg_to_rad ), np.cos((90.0 - point[2]) * deg_to_rad ) ]) for point in ordered_points]
         xs_cart, ys_cart, zs_cart = [[point[0] for point in cart_points], [point[1] for point in cart_points], [point[2] for point in cart_points] ]
@@ -2476,19 +2341,14 @@ class PanStarsFieldManager:
         plt.close('all')
 
         max_n_good_fits_to_show = n_fits_x * (n_fits_y - 1) + 2
-        figsize = ( n_fits_x * fig_size_unit , n_fits_y * 3 * fig_size_unit)
+        figsize = ( n_fits_x * fig_size_unit , n_fits_y * 2 * fig_size_unit)
         fig = plt.figure(constrained_layout=True, figsize = figsize)
-        gs = fig.add_gridspec(n_fits_y * 2 * 3 + 1, n_fits_x * 2)
+        gs = fig.add_gridspec(n_fits_y * 2 * 2 + 1, n_fits_x * 2)
         gs_indeces_for_single_fits = [ [ [[(i // n_fits_x) * 4, (i // n_fits_x) * 4 + 1], [(i % n_fits_x) * 2, (i % n_fits_x) * 2 + 1]],
-                                         [[(i // n_fits_x) * 4 + 2, (i // n_fits_x) * 4 + 2 + 1], [(i % n_fits_x) * 2, (i % n_fits_x) * 2 + 1]],
-                                         [[(i // n_fits_x) * 4 + 4, (i // n_fits_x) * 4 + 4 + 1], [(i % n_fits_x) * 2, (i % n_fits_x) * 2 + 1]] ]
+                                         [[(i // n_fits_x) * 4 + 2, (i // n_fits_x) * 4 + 2 + 1], [(i % n_fits_x) * 2, (i % n_fits_x) * 2 + 1]] ]
                                         for i in range(max_n_good_fits_to_show - 2)]
-        gs_indeces_for_single_fits = gs_indeces_for_single_fits + [ [ [[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 1] ,[0, 1]],
-                                                                      [[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 2, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 2 + 1] ,[0, 1]],
-                                                                      [[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 4 + 2, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 4 + 2 + 1] ,[0, 1]]],
-                                                                    [ [[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 1] ,[ (n_fits_x - 1) * 2, (n_fits_x - 1) * 2 + 1]],
-                                                                      [[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 2, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 2 + 1] ,[(n_fits_x - 1) * 2, (n_fits_x - 1) * 2 + 1]],
-                                                                      [[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 4 + 2, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 4 + 2 + 1] ,[(n_fits_x - 1) * 2, (n_fits_x - 1) * 2 + 1]] ] ]
+        gs_indeces_for_single_fits = gs_indeces_for_single_fits + [ [[[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 1, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 1 + 1] ,[0, 1]], [[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 1, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 1 + 1] ,[0, 1]]],
+                                                                    [[[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 1, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 1 + 1] ,[ (n_fits_x - 1) * 2, (n_fits_x - 1) * 2 + 1]], [[((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 1, ((max_n_good_fits_to_show-2) // n_fits_x) * 4 + 2 + 1 + 1] ,[(n_fits_x - 1) * 2, (n_fits_x - 1) * 2 + 1]] ] ]
 
         #f, axarr = plt.subplots(2, max_n_good_fits_to_show, figsize = )
         #axarr[0,0].set_ylabel(r'$\Delta \mu$ (mag)')
@@ -2497,17 +2357,17 @@ class PanStarsFieldManager:
         print ('gs_indeces_for_single_fits = '  +str(gs_indeces_for_single_fits))
         for i in range(min(len(nearby_sn_indeces), max_n_good_fits_to_show, len(gs_indeces_for_single_fits))):
             gs_indeces = gs_indeces_for_single_fits[i]
-            #print ('gs_indeces = ' + str(gs_indeces))
-            #print ('ordered_param_vals = ' + str(ordered_param_vals))
-
+            print ('gs_indeces = ' + str(gs_indeces))
+            print ('ordered_param_vals = ' + str(ordered_param_vals))
+            ax0 = fig.add_subplot(gs[gs_indeces[0][0][0]:gs_indeces[0][0][1] + 1, gs_indeces[0][1][0]:gs_indeces[0][1][1] + 1])
+            ax1 = fig.add_subplot(gs[gs_indeces[1][0][0]:gs_indeces[1][0][1] + 1, gs_indeces[1][1][0]:gs_indeces[1][1][1] + 1])
             fitting_coord = ordered_points[i]
-            print ('fitting_coord = ' + str(fitting_coord))
-            fitted_params = ordered_param_vals[i]
+            fitted_mass_power, fitted_radius_power = ordered_param_vals[i]
             improvement = ordered_improvements[i]
             r_chi_sqr = ordered_r_chi_squares[i]
             null_r_chi_sqr = ordered_null_chi_squares[i]
             #fitted_mass = self.getHaloMassFromVariedParam(fitted_mass_power)
-            #fitted_radius = self.getRadiusFromVariedParam(fitted_radius_power)
+            fitted_radius = self.getRadiusFromVariedParam(fitted_radius_power)
             sn_indeces_to_plot = nearby_sn_indeces[i]
             zs_to_plot = [self.all_zs[index] for index in sn_indeces_to_plot]
             muResids_to_plot = [self.all_muResids[index] for index in sn_indeces_to_plot]
@@ -2516,67 +2376,56 @@ class PanStarsFieldManager:
             Decs_to_plot = [self.all_Decs[index] for index in sn_indeces_to_plot]
             surveys_to_plot = [self.all_surveys[index] for index in sn_indeces_to_plot]
             colors_to_plot = [self.survey_to_color_dict[survey] for survey in surveys_to_plot]
-            #RA_offset_to_center = (180.0 - fitting_coord[1])
-            #RAs_for_resids = self.centerRAs(RAs_to_plot, RA_offset_to_center)
-            #central_RA, central_Dec = [self.centerRAs([fitting_coord[1]],  RA_offset_to_center )[0],  fitting_coord[2]]
-            fitted_resids = self.muDiff_of_z_funct(zs_to_plot, RAs_to_plot, Decs_to_plot, zs_to_plot, RAs_to_plot, Decs_to_plot, muResids_to_plot, mu_errs_to_plot, [fitting_coord[1], fitting_coord[2]], [fitting_coord[0], 0.0, 0.0]  + fitted_params)
-            null_resids = self.muDiff_of_z_funct(zs_to_plot, RAs_to_plot, Decs_to_plot, zs_to_plot, RAs_to_plot, Decs_to_plot, muResids_to_plot, mu_errs_to_plot, [fitting_coord[1], fitting_coord[2]], [fitting_coord[0], 0.0, 0.0] + self.param_init_guess)
-            fitted_velocities =  self.getVelocityField(zs_to_plot, RAs_to_plot, Decs_to_plot, fitting_coord, 0.0, 0.0, fitted_params)[0]
-            null_velocities = self.getVelocityField(zs_to_plot, RAs_to_plot, Decs_to_plot, fitting_coord, 0.0, 0.0, self.param_init_guess)[0]
+            RA_offset_to_center = (180.0 - fitting_coord[1])
+            RAs_for_resids = self.centerRAs(RAs_to_plot, RA_offset_to_center)
+            central_RA, central_Dec = [self.centerRAs([fitting_coord[1]],  RA_offset_to_center )[0],  fitting_coord[2]]
+            fitted_resids = self.muDiff_of_z_funct(zs_to_plot, RAs_for_resids, Decs_to_plot, zs_to_plot, RAs_to_plot, Decs_to_plot, muResids_to_plot, mu_errs_to_plot, [central_RA, central_Dec], [fitting_coord[0], fitted_mass_power, fitted_radius_power, 0.0, 0.0], self.fit_funct)
+            null_resids = self.muDiff_of_z_funct(zs_to_plot, RAs_for_resids, Decs_to_plot, zs_to_plot, RAs_to_plot, Decs_to_plot, muResids_to_plot, mu_errs_to_plot, [central_RA, central_Dec], [fitting_coord[0], 0.0, 2.0, 0.0, 0.0], self.fit_funct)
 
-            ax0 = fig.add_subplot(gs[gs_indeces[0][0][0]:gs_indeces[0][0][1] + 1, gs_indeces[0][1][0]:gs_indeces[0][1][1] + 1])
-            ax1 = fig.add_subplot(gs[gs_indeces[1][0][0]:gs_indeces[1][0][1] + 1, gs_indeces[1][1][0]:gs_indeces[1][1][1] + 1])
-            ax2 = fig.add_subplot(gs[gs_indeces[2][0][0]:gs_indeces[2][0][1] + 1, gs_indeces[2][1][0]:gs_indeces[2][1][1] + 1])
             ax0.scatter(zs_to_plot, muResids_to_plot, c = colors_to_plot, marker = 'o')
+            #print ('!!! fitted_resids = ' )
+            #print (fitted_resids)
             ax0.scatter(zs_to_plot, fitted_resids, c = 'k', marker = 'x', alpha = 0.5)
-            ax1.scatter(zs_to_plot, np.abs(fitted_velocities), c = 'k', marker = 'x')
+            #ax0.scatter(zs_to_plot, null_resids, c = 'r', marker = 'x')
             [ ax0.annotate(str(j + 1), (zs_to_plot[j], muResids_to_plot[j]), color = 'k', fontsize = ticksize, verticalalignment = 'center', horizontalalignment = 'center') for j in range(len(sn_indeces_to_plot)) ]
             ax0.errorbar(zs_to_plot, muResids_to_plot, yerr = mu_errs_to_plot, colors = colors_to_plot, fmt = 'none', ecolor = colors_to_plot)
             ax0.axvline(ordered_points[i][0], color = 'k', linestyle = '--')
-            ax2.scatter(RAs_to_plot, Decs_to_plot, c = colors_to_plot, marker = 'o')
-            [ ax2.annotate(str(j + 1), (RAs_to_plot[j], Decs_to_plot[j]), color = 'k', fontsize = ticksize, verticalalignment = 'center', horizontalalignment = 'center' ) for j in range(len(sn_indeces_to_plot)) ]
-            ax2.scatter(fitting_coord[1], fitting_coord[2], c = 'k', marker = 'x', s = 10 )
-            ax2.axvline(fitting_coord[1], linestyle = '--', color = 'k')
-            ax2.axhline(fitting_coord[2], linestyle = '--', color = 'k')
+            ax1.scatter(RAs_to_plot, Decs_to_plot, c = colors_to_plot, marker = 'o')
+            [ ax1.annotate(str(j + 1), (RAs_to_plot[j], Decs_to_plot[j]), color = 'k', fontsize = ticksize, verticalalignment = 'center', horizontalalignment = 'center' ) for j in range(len(sn_indeces_to_plot)) ]
+            ax1.scatter(fitting_coord[1], fitting_coord[2], c = 'k', marker = 'x', s = 10 )
             ax0.set_xlabel(r'$z$', fontsize = labelsize)
-            ax1.set_xlabel(r'$z$', fontsize = labelsize)
-            ax2.set_xlabel(r'RA (deg)', fontsize = labelsize)
+            ax1.set_xlabel(r'RA (deg)', fontsize = labelsize)
             ax0.set_ylabel(r'$\Delta \mu$ (mag)', fontsize = labelsize)
-            ax1.set_ylabel(r'$|v_{pec}| / c$', fontsize = labelsize)
-            ax2.set_ylabel(r'Dec (deg)', fontsize = labelsize)
+            ax1.set_ylabel(r'Dec (deg)', fontsize = labelsize)
             ax0.tick_params(axis='both', labelsize= ticksize)
             ax1.tick_params(axis='both', labelsize= ticksize)
-            ax2.tick_params(axis='both', labelsize= ticksize)
             default_ylim = ax0.get_ylim()
             ax0.set_ylim([default_ylim[0] - (default_ylim[1] - default_ylim[0]) * 0.1, default_ylim[1] + (default_ylim[1] - default_ylim[0]) * 0.1])
-            default_vel_lim = ax1.get_ylim()
-            if max([abs(default_vel_lim[0]), abs(default_vel_lim[1])]) < vel_lim_min:
-                ax1.set_ylim([0.0, vel_lim_min])
-
-            print ('[r_chi_sqr, null_r_chi_sqr] = ' + str([r_chi_sqr, null_r_chi_sqr] ))
             ax0.text(0.05, 0.97,
                                  '' # 'fit ' + str(can.round_to_n(improvement, 3)) + 'X better' + '\n'
                                 + r'$\chi_\nu^2 / \chi_{\nu, 0}^2=$' + str(can.round_to_n(r_chi_sqr / null_r_chi_sqr, 6)) + '; '
                                 #+ r'$\chi_\nu^2=$' + str(can.round_to_n(r_chi_sqr, 3)) + '; '
                                 #+ r'$\chi_{\nu, 0}^2=$' + str(can.round_to_n(null_r_chi_sqr, 3))
                                 , fontsize = labelsize, transform = ax0.transAxes, verticalalignment = 'top', horizontalalignment = 'left', color = 'grey')
-            label_strs = self.param_info_dict['label_strs']
-            unit_strs = self.param_info_dict['units']
-            print ('[len(label_strs), len(fitted_params), len(unit_strs)] = ' + str([len(label_strs), len(fitted_params), len(unit_strs)]))
-            val_text = '\n'.join([label_strs[i] + r'$=$' + str(can.round_to_n(fitted_params[i], 3)) + ' ' + unit_strs[i]  for i in range(len(fitted_params))])
-            ax0.text(0.05, 0.03, val_text, fontsize = labelsize, transform = ax0.transAxes, verticalalignment = 'bottom', horizontalalignment = 'left', color = 'grey')
+            ax0.text(0.05, 0.03, r'$\delta_0=$' + str(can.round_to_n(fitted_mass_power, 3))  +  '\n' + r'$r_C=$' + str(can.round_to_n(fitted_radius, 3)) + r' Mpc', fontsize = labelsize, transform = ax0.transAxes, verticalalignment = 'bottom', horizontalalignment = 'left', color = 'grey')
             #ax0.text(0.05, 0.03, r'$M=$' + str(can.round_to_n(fitted_mass, 3)) + r' T$M_{\odot}$' +  '\n' + r'$r_C=$' + str(can.round_to_n(fitted_radius, 3)) + r' Mpc', fontsize = labelsize, transform = ax0.transAxes, verticalalignment = 'bottom', horizontalalignment = 'left', color = 'grey')
 
-        legend_gs_indeces = [(n_fits_y - 1) * 6, [2,-2]]
-        sky_gs_indeces = [[(n_fits_y - 1) * 6 + 1, (n_fits_y - 1) * 6 + 7], [2,-2]]
+
+        legend_gs_indeces = [(n_fits_y - 1) * 4, [2,-2]]
+        print ('legend_gs_indeces = ' + str(legend_gs_indeces))
+        sky_gs_indeces = [[(n_fits_y - 1) * 4 + 1, (n_fits_y - 1) * 4 + 5], [2,-2]]
+        print ('sky_gs_indeces = ' + str(sky_gs_indeces))
+
         sky_ax = fig.add_subplot(gs[sky_gs_indeces[0][0]:sky_gs_indeces[0][1], sky_gs_indeces[1][0]:sky_gs_indeces[1][1]], projection="aitoff")
         plots_for_legend = self.makeSkyPlotOfSNe(sky_ax)
+        #sky_ax.text(0.5, 0.5, 'sky GOES HERE' )
         legend_ax = fig.add_subplot(gs[legend_gs_indeces[0], legend_gs_indeces[1][0]:legend_gs_indeces[1][1]])
         legend_ax.legend(plots_for_legend, self.included_surveys, ncol = 7, fontsize = legend_fontsize)
         legend_ax.set_xticks([])
         legend_ax.set_yticks([])
-        fig.tight_layout()
-        fig.savefig(plot_dir + save_plot_prefix + gridspec_density_plot_suffix)
+        #legend_ax.text(0.5, 0.5, 'LEGEND GOES HERE' )
+        plt.tight_layout()
+        plt.savefig(plot_dir + save_plot_prefix + gridspec_density_plot_suffix)
         if show: plt.show()
         plt.close('all')
 
@@ -2590,19 +2439,16 @@ class PanStarsFieldManager:
 
 
     def __init__(self, data_set,
-                      randomize_each_survey = 0, randomize_each_field = 0, randomize_all_sn = 0, randomized_sn_number = 0,
+                      randomize_each_survey = 0, randomize_each_field = 0, randomize_all_sn = 0,
                       n_z_bins = 10,
                       zHD = 1, OmM = 0.3, OmL = 0.7, Om0 = 1.0, OmR = 0.0, H0 = 70.0, do_cosmic_fit = 0,
                       archive_healpix_sides = 32, annulus_inner_comoving_rad_scaling = 1.0, annulus_outer_comoving_rad_scaling = 2.0, gal_dens_weighting = 0.5,
                       full_sdss_gal_data_file = 'SDSS_PSSuperField3_SDSSGals_Allpz.csv', preloaded_sdss_gals = None, start_spherical_comoving_rad_frac = 0.03,
                       interp_z_params = [0.0, 100.0, 1001], z_range = [-0.1, 3.0], pull_extinctions = 0, surveys_to_include = ['all'], surveys_to_ignore = [],
-                      n_mcmc_steps = 2000, archive_to_use = 'ps1md', min_v_scale_power = -5,
-                      resid_from_grav = 0, resid_from_vel = 1, resid_profile_funct = 'exp_void',
+                      n_mcmc_steps = 1500, archive_to_use = 'ps1md', resid_fitting_funct = 'redshift_from_vel_exp_void', min_v_scale_power = -5,
                       plot_save_subdir = '',mcmc_extra_save_dir = 'mcmcs/',
-                      fixed_comoving_scale_radius_power = 1.0, sn_data_type = 'pantheon_plus', low_log_prob_val = -100,
-                      cutoff_radius_Mpc = 200, NFW_overdensity_param = 200, angular_scale_to_bin = 3.3 * 2  ,
-                      hemisphere = 'both', angle_divs = 1, angle_slice = 1, rand_sn_file_prefix = 'Rand_SNe_Sequence_' #search_octant = 'all',
-                      ):
+                      fixed_comoving_scale_radius_power = 1.0, sn_data_type = 'real', low_log_prob_val = -100,
+                      cutoff_radius_Mpc = 200, NFW_overdensity_param = 200 ):
 
         self.cutoff_radius = cutoff_radius_Mpc
         self.show_mcmc = (1 + randomize_all_sn) % 2
@@ -2612,7 +2458,6 @@ class PanStarsFieldManager:
         self.astro_arch = AstronomicalParameterArchive()
         self.dir_archive = DirectoryArchive()
         self.plot_save_dir = self.dir_archive.getPlotDirectory() + plot_save_subdir
-        self.rand_sn_file_prefix = rand_sn_file_prefix
         self.mcmc_plot_save_dir = self.plot_save_dir + mcmc_extra_save_dir
         self.deg_to_rad = self.astro_arch.getDegToRad()
         self.sn_data_type = sn_data_type
@@ -2630,22 +2475,15 @@ class PanStarsFieldManager:
         self.surveys_to_include = surveys_to_include
         self.randomize_all = randomize_all_sn
         self.randomize_by_survey = randomize_each_survey
-        self.randomize_sn_number = randomized_sn_number
-        self.hemisphere = 'both'
-        self.angle_divs = 1
-        self.angle_slice = 1
-        self.hemisphere = 'both'
-        self.angle_divs = 1
-        self.angle_slice = 1
         print ('initializing SNe...')
-        self.initializeSN(self.z_range, surveys_to_include, surveys_to_ignore, randomize_all = self.randomize_all, randomize_by_survey = self.randomize_by_survey, randomized_sn_number = randomized_sn_number)
+        self.initializeSN(self.z_range, surveys_to_include, surveys_to_ignore, randomize_all = self.randomize_all, randomize_by_survey = self.randomize_by_survey )
         print ('SNe initialized.')
         if do_cosmic_fit:
             print ('Doing cosmic fit. ')
             self.OmM, self.OmL, self.H0 = self.doCosmicFit()
         else:
             print ('Not doing cosmic fit. ')
-        #print ('self.mu_of_z = ' + str(self.mu_of_z))
+        print ('self.mu_of_z = ' + str(self.mu_of_z))
         self.all_muResids = [sn['mu'] - self.mu_of_z(sn['z']) for sn in self.all_sns]
         self.interp_z_params = interp_z_params
         self.initialize_r_of_z_interp(interp_z_params)
@@ -2661,7 +2499,6 @@ class PanStarsFieldManager:
         self.start_spherical_comoving_rad_frac = start_spherical_comoving_rad_frac
         self.gal_dens_weighting = gal_dens_weighting
         self.randomize = (randomize_each_survey)
-        self.binning_angular_scale = angular_scale_to_bin
 
         #if randomize_each_survey:
         #    self.randomizeSNBySurvey()
@@ -2673,26 +2510,23 @@ class PanStarsFieldManager:
         self.initializeSNByField(archive_to_use, randomize = randomize_each_field)
         print ('fields initialized...')
 
-        #if resid_profile_funct == 'redshift_from_grav':
-        #    #For a redshift due to a gravitational well
-        #    self.fit_funct, self.muDiff_of_z_funct, self.n_fit_params, self.bounds, self.mcmc_start_params, self.mcmc_step_sizes  = self.getFittingFunctG()
-        #How do we calculate the total redshift: gravitational, doppler, or both
-        if resid_from_grav and resid_from_vel:
-            #!!! Both not written yet !!!
-            self.muDiff_of_z_funct = self.ResidFunctFromGravAndVelocity
-        elif resid_from_grav:
-            #Gravitational
-            self.muDiff_of_z_funct = self.redshiftDueToGravPotential
-        else:
-            #Peculiar velocity
-            self.muDiff_of_z_funct = self.getMuDiffOfVelocityField
-
-        self.resid_profile_funct = resid_profile_funct
-        self.CosmicDensityProfile = cdp.CosmicDensityProfile(density_profile_type = self.resid_profile_funct)
-        self.radial_mass_funct, model_free_params, self.bounds, self.param_conversion_funct, self.param_info_dict, self.param_init_guess = self.CosmicDensityProfile.getProfileFittingPieces()
+        if resid_fitting_funct == 'redshift_from_grav':
+            #For a redshift due to a gravitational well
+            self.fit_funct, self.muDiff_of_z_funct, self.n_fit_params, self.bounds, self.mcmc_start_params, self.mcmc_step_sizes  = self.getFittingFunctG()
+        elif resid_fitting_funct == 'redshift_from_vel_nfw':
+            #for a redshift due to a velocity profile (v given in km/s)
+            self.fit_funct, self.muDiff_of_z_funct, self.n_fit_params, self.bounds, self.mcmc_start_params, self.mcmc_step_sizes = self.getFittingFunctVelNFWOurs()
+        elif resid_fitting_funct == 'redshift_from_vel_point':
+            #for a redshift due to a velocity profile (v given in km/s)
+            self.fit_funct, self.muDiff_of_z_funct, self.n_fit_params, self.bounds, self.mcmc_start_params, self.mcmc_step_sizes = self.getFittingFunctVelPointMass()
+        elif resid_fitting_funct == 'redshift_from_vel_uniform':
+            #for a redshift due to a velocity profile (v given in km/s)
+            self.fit_funct, self.muDiff_of_z_funct, model_free_params, self.bounds, self.mcmc_start_params, self.mcmc_step_sizes = self.getFittingFunctVelUniformMass()
+        elif resid_fitting_funct == 'redshift_from_vel_exp_void':
+            #for a redshift due to a velocity profile (v given in km/s)
+            self.fit_funct, self.muDiff_of_z_funct, model_free_params, self.bounds, self.mcmc_start_params, self.mcmc_step_sizes = self.getFittingFunctVelExponentialVoid()
 
         self.n_fit_params = model_free_params + 1 #An additional fit parameter, in the form of the subtracted away mean of SNe in a field
-        self.n_null_fit_params = 1
         self.fit_params_by_field = {field_key:[] for field_key in self.fields.keys()}
         self.prob_fits_by_field = {field_key:{'sne_chi_sqr':0.0, 'sne_null_chi_sqr':0.0, 'sne_chi_sqr_prob':0.0, 'n_sig_gal_dens':[0.0, 0.0], 'n_sig_gal_prob':0.0, 'sne_overall_prob':0.0} for field_key in self.fields.keys()}
         print ('Starting to assign best fit curves...')
@@ -2721,47 +2555,22 @@ def loadPickledPlotter(file_to_load):
 
 
 if __name__ == "__main__":
-    # $ python makePlotOfPS1MDFieldsClass.py 1 24 100 14 0.8 0 1 0 10 1
-    # $ python makePlotOfPS1MDFieldsClass.py 1 24 100 14 0.8 1 1 0 10 1
+    # $ python makePlotOfPS1MDFieldsClass.py 100 15 0.5 0 1
     line_args = sys.argv[1:]
     #fitter_id = line_args[0]
     #field_ids = line_args[1]
-    fit_id = line_args[0]
-    fit_id = int(fit_id)
-    fit_comoving_density = int(line_args[1]) #50
-    comoving_bin = line_args[2]
-    if comoving_bin == 'None':
-        comoving_bin = None
-    comoving_bin = int(comoving_bin)
-    min_n_sn = int(line_args[3]) #15
-    max_redshift = float(line_args[4])
-    randomize_all_sn = int(line_args[5])
-    #search_octant = line_args[6]
-    #if search_octant.isdigit():
-    #    search_octant = int(search_octant)
-    hemisphere = line_args[6]
-    if hemisphere.isdigit():
-        hemisphere = int(hemisphere)
-    angle_divs = int(line_args[7])
-    angle_slice = int(line_args[8])
-    print ('[fit_id, fit_comoving_density, comoving_bin, min_n_sn, max_redshift, randomize_all_sn, hemisphere, angle_divs, angle_slice] = ' + str([fit_id, fit_comoving_density, comoving_bin, min_n_sn, max_redshift, randomize_all_sn, hemisphere, angle_divs, angle_slice]))
-
-    #To calculate this, do:
-    # field_plotter = PanStarsFieldManager(1, full_sdss_gal_data_file = 'SDSS_fullCoverage_SDSSGals_pzAll.csv', preloaded_sdss_gals = fulldata_fastRead, gal_dens_weighting = gal_dens_weighting, z_range = z_range, sn_data_type = sn_data_type, zHD = zHD, cutoff_radius_Mpc = init_comoving_bin_guess, NFW_overdensity_param = overdensity_param, resid_from_grav = 0, resid_from_vel = 1, resid_profile_funct = resid_profile_funct, randomize_all_sn = randomize_all_sn, n_mcmc_steps = n_mcmc_steps, search_octant = 'all', angular_scale_to_bin = angular_scale_to_bin )
-    # smallest_cluster_by_n_sn[min_n_sn] = field_plotter.determineMinimumSpacingComovingBinningByNSNe(min_n_sn)
-    #
-    smallest_cluster_by_n_sn = {2: 0.0, 3: 0.0, 4:0.0, 5: 0.4706012544945625, 6: 1.291879585616636, 7: 5.273206273547085, 8: 5.873918626542572, 9:8.088450520567488, 10: 8.871590795028839, 11: 8.871590795028839, 12: 13.384796636581399, 13:15.474809950037185, 14:15.47826263944724, 15:17.073129458455856, 16:17.946806338740117}
-
-
+    fit_comoving_density = float(line_args[0]) #50
+    min_n_sn = float(line_args[1]) #15
     init_comoving_bin_guess = 200
-    angular_scale_PS1MD = 3.3   #The angular scale of PS1 is 3.3 degree in diameter (see Abstract of: https://iopscience.iop.org/article/10.1088/0004-637X/745/1/42/pdf).
-    angular_scale_to_bin = angular_scale_PS1MD * 2
+    max_redshift = float(line_args[2])
+    randomize_all_sn = int(line_args[3])
+    fit_id = line_args[4]
+    ang_scale_at_max_z_deg = 5.0 * np.sqrt(2)  #The angular scale of PS1 is ~ 5 degree square.  So that times root(2)
     z_range = [-0.1, 3.0]
-    min_redshift = 0.01
     n_mcmc_steps = 2000
     overdensity_param = 200 #Delta, the fraction of background mass density that the average halo mass density must be
     n_good_fits_to_show = 5
-    resid_profile_funct = 'exp_void'
+    resid_fitting_funct = 'redshift_from_vel_exp_void'
     #randomize_all_sn = 0
     #print ('field_ids = ' + str(field_ids))
     #field_ids[1:-1].split(',')
@@ -2771,55 +2580,61 @@ if __name__ == "__main__":
     do_randomization_by_survey = 0
     gal_dens_weighting = 0.0 #can be 0.5
     save_plot = 1
-    #init_guess = [0.0, 2]
-    #bounds = [[-500.0, 500.0], [0.0, 3.0]]
+    init_guess = [0.0, 2]
+    bounds = [[-500.0, 500.0], [0.0, 3.0]]
     n_grid_samples = [101, 31]
     sn_data_type = 'pantheon_plus' #'pantheon_plus' #real - for old Pantheon data
     zHD = 1 # Was 1 for old Pantheon data
     #fit_params_file =  ('RandField' if do_randomization_by_field else 'RandSurvey' if do_randomization_by_survey else 'True') + 'PS1MDFieldFitter_field' + '_'.join([str(elem) for elem in field_ids])  + '_GalWeight0p' + str(int(10 * gal_dens_weighting)) + '_N' + str(fitter_id) + '.csv'
     #plot_file_name = ('RandField' if do_randomization_by_field else 'RandSurvey' if do_randomization_by_survey else 'True') + 'PS1MDFieldFitter_' + sn_data_type + '_field' + '_'.join([str(elem) for elem in field_ids]) + '_GalWeight0p' + str(int(10 * gal_dens_weighting)) + 'z_range' + str(z_range[0]) + '_' + str(z_range[1]) +'_N' + str(fitter_id) + '.pdf'
     sdssdir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/SNIsotropyProject/SDSSGalaxies/'
-
-    read_in_galaxy_data = 0
-    if read_in_galaxy_data:
-        fulldata_fastRead = can.readInColumnsToList('SDSS_fullCoverage_SDSSGals_pzAll.csv', sdssdir, delimiter = ',', n_ignore = 2, all_np_readable = 1)
-    else:
-        fulldata_fastRead = None
-
+    fulldata_fastRead = can.readInColumnsToList('SDSS_fullCoverage_SDSSGals_pzAll.csv', sdssdir, delimiter = ',', n_ignore = 2, all_np_readable = 1)
     #print('fit_id = ' + str(fit_id))
     #print('fit_params_file =  ' + str(fit_params_file))
-    field_plotter = PanStarsFieldManager(1, full_sdss_gal_data_file = 'SDSS_fullCoverage_SDSSGals_pzAll.csv', preloaded_sdss_gals = fulldata_fastRead, gal_dens_weighting = gal_dens_weighting, z_range = z_range, sn_data_type = sn_data_type, zHD = zHD, cutoff_radius_Mpc = init_comoving_bin_guess, NFW_overdensity_param = overdensity_param, resid_from_grav = 0, resid_from_vel = 1, resid_profile_funct = resid_profile_funct, randomize_all_sn = randomize_all_sn, randomized_sn_number = (fit_id if randomize_all_sn else 0), n_mcmc_steps = n_mcmc_steps, hemisphere = hemisphere, angle_divs = angle_divs, angle_slice = angle_slice, angular_scale_to_bin = angular_scale_to_bin )# , surveys_to_include = ['PS1MD' ,'SDSS', 'SNLS'])
-    #comoving_bin = field_plotter.getComovingCrossSectionOfAngularScaleAtRedshift(max_redshift, angular_scale_to_bin )
-    #comoving_bin = None
+    field_plotter = PanStarsFieldManager(1, full_sdss_gal_data_file = 'SDSS_fullCoverage_SDSSGals_pzAll.csv', preloaded_sdss_gals = fulldata_fastRead, gal_dens_weighting = gal_dens_weighting, z_range = z_range, sn_data_type = sn_data_type, zHD = zHD, cutoff_radius_Mpc = init_comoving_bin_guess, NFW_overdensity_param = overdensity_param, resid_fitting_funct = resid_fitting_funct, randomize_all_sn = randomize_all_sn, n_mcmc_steps = n_mcmc_steps )# , surveys_to_include = ['PS1MD' ,'SDSS', 'SNLS'])
+    comoving_bin = int(field_plotter.r_of_z_interp(max_redshift) * 2.0 * np.pi * ang_scale_at_max_z_deg / 360.0)
     print ('comoving_bin = ' + str(comoving_bin) + ' Mpc')
-    field_plotter.cutoff_radius = comoving_bin
-    #min_redshift = field_plotter.z_of_r_interp(comoving_bin)
+    field_plotter.cutoff_radius_Mpc = comoving_bin
+    min_redshift = field_plotter.z_of_r_interp(comoving_bin)
     print ('[min_redshift, max_redshift] = ' + str([min_redshift, max_redshift] ))
     #field_fitter =  PanStarsFieldManager(1, randomize_each_field = do_randomization_by_field, randomize_each_survey = do_randomization_by_survey, surveys_to_include = ['PS1MD' ,'SDSS', 'SNLS'])
     #print ('field_plotter.mcmc_start_params = ' + str(field_plotter.mcmc_start_params))
-    spherical_points, fits = field_plotter.doFitsOnGrid( fit_comoving_density, min_n_sn, z_range = [min_redshift, max_redshift], init_guess = None, bounds = None, n_grid_samples = n_grid_samples, hemisphere = hemisphere, angle_divs = angle_divs, angle_slice = angle_slice, comoving_bin = comoving_bin )
-    save_prefix = 'OverdensityFit' + str(fit_id) + '_MinNSN_' + str(min_n_sn) + '_GridDens_' + str(fit_comoving_density) + '_BinSize_' + str(comoving_bin) + '_Hemisphere_' + str(hemisphere) + '_RArange_' + str(angle_slice) + 'of' + str(angle_divs) + '_Rand' + str(randomize_all_sn)
-    #field_plotter.makePlotOfOneDFits(spherical_points, fits, fig_size_unit = 2.5, save_plot_prefix = save_prefix)
-
-
-    #Finally, do a big fit centered at the best fit location, which includes all supernovae
-
-    if len([fit for fit in fits if fit != None]) > 0:
-        final_n_mcmc_steps = 10000
-        final_n_mcmc_steps = 4000
-        field_plotter.n_mcmc_steps = final_n_mcmc_steps
-        best_fit_index = np.argmin([fit[1] / fit[2] if fit != None else np.inf for fit in fits ])
-        best_fit_point, best_fit_params = [spherical_points[best_fit_index], fits[best_fit_index][0]]
-        print ('best_fit_point = ' + str(best_fit_point))
-        print ('best_fit_params = ' + str(best_fit_params))
-        final_fit, final_r_chi_square, final_null_r_chi_square, final_null_prob = field_plotter.doFullFitAroundPoint([best_fit_point[0]] + [0.0, 0.0] + best_fit_params, best_fit_point[1:], comoving_bin, min_n_sn, method = 'mcmc', mcmc_save_suffix = save_prefix )
-        print ('final_fit = ' + str(final_fit))
-        final_params = final_fit['x']
-
-        spherical_points = spherical_points + [[final_params[0], best_fit_point[1] + final_params[1] / np.cos(np.deg2rad(best_fit_point[2] + final_params[2])), best_fit_point[2] + final_params[2]]]
-        fits = fits + [[final_params[3:]] + [final_r_chi_square, final_null_r_chi_square, final_null_prob]]
-
+    spherical_points, fits = field_plotter.doFitsOnGrid( fit_comoving_density, min_n_sn, z_range = [min_redshift, max_redshift], init_guess = init_guess, bounds = bounds, n_grid_samples = n_grid_samples )
+    save_prefix = 'OverdensityFit' + str(fit_id) + '_MinNSN_' + str(min_n_sn) + '_GridDens_' + str(fit_comoving_density) + '_BinSize_' + str(comoving_bin) + '_Rand' + str(randomize_all_sn)
+    field_plotter.makePlotOfOneDFits(spherical_points, fits, fig_size_unit = 2.5, save_plot_prefix = save_prefix)
     field_plotter.saveOneDFits(spherical_points, fits, save_file= save_prefix + '_fits.txt', header = 'Grid Density ' + str(fit_comoving_density) + ' Mpc' + '\n'                                                                                        + 'Min Nearby SN ' + str(min_n_sn) + '\n'
                                                                                                    + 'Comoving bin ' + str(comoving_bin) + '\n'
-                                                                                                    + 'z, RA (deg), Dec (deg), delta_0, r_0 (Mpc), z_c, Delta phi (deg), Delta theta (deg), Full R Chi^2, Full Null R Chi^2, Prob Improvement'  )
+                                                                                                    + 'z, RA (deg), Dec (deg), M (T MSun), r_cut (Mpc), Full R Chi^2, Full Null R Chi^2, Prob Improvement'  )
     field_plotter.makePlotOfOneDFits(spherical_points, fits, fig_size_unit = 2.5, save_plot_prefix = save_prefix, comoving_bin = comoving_bin)
+    sys.exit()
+
+    #Finally, do a big fit centered at the best fit location, which includes all supernovae
+    best_fit_index = np.argmax([fit[3] for fit in fits])
+    best_fit_point, best_fit_params = [spherical_points[best_fit_index], fits[best_fit_index][0]]
+    all_sn_indeces = list(range(len(field_plotter.all_sns)))
+    final_n_mcmc_steps = 5000
+    field_plotter.n_mcmc_steps = final_n_mcmc_steps
+    nearby_sn_indeces = self.getSNWithinComovingDistance(best_fit_point[0], [best_fit_point[1], best_fit_point[2]], comoving_bin)
+    final_fit, final_r_chi_square, final_null_r_chi_square, final_null_prob = field_plotter.doFitOnSNeSubset(best_fit_point, nearby_sn_indeces, method = 'mcmc', comoving_bound = comoving_bin, start_min_seed = [best_fit_point[0]] + best_fit_params + [0.0, 0.0], bounds = [[max(best_fit_point[0] - 0.1, 0.0), best_fit_point[0] + 0.1]] + bounds + [[-5, 5], [-5, 5]] )
+    final_point = [final_fit[0]['x'][0], best_fit_point[1] + final_fit[0]['x'][3], best_fit_point[2]+ final_fit[0]['x'][3]]
+    print ('final_point = ' + str(final_point))
+    final_fit_param, final_fit_prob = [[final_fit['x'][1], final_fit['x'][2]], final_fit['fun']]
+    final_prob_improvement = self.computeProbImprovement( -final_fit_prob , -final_null_prob)
+    #trimmed_final_fit = [final_fit[0].copy(), final_fit[1:]]
+    trimmed_final_fit = [final_fit_param, final_r_chi_square, final_null_r_chi_square, final_prob_improvement]
+    #trimmed_final_fit = [[final_fit['x'][1], final_fit['x'][2]]] + final_fit[2:]
+    fits = fits + [trimmed_final_fit]
+    spherical_points = spherical_points + [final_point]
+    field_plotter.makePlotOfOneDFits(spherical_points, fits, fig_size_unit = 2.5, save_plot_prefix = save_prefix, comoving_bin = comoving_bin)
+    #sys.exit()
+
+    #fit_res = field_plotter.computeByHandFitsByField(field_ids)
+
+    #if save_plot:
+    #    field_plotter.makePlotOfPS1MDFields(show = 0, save = 1, save_name = plot_file_name,  plot_fit = 1)
+
+    #field_plotter.preloaded_sdss_gals = None
+
+    #print ('field_plotter.prob_fits_by_field = ' + str(field_plotter.prob_fits_by_field))
+    #pickle.dump(field_plotter, open(fit_file, "wb"))
+    #field_plotter.saveFitInformation(fit_params_file , save_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/SNIsotropyProject/SNeFieldFits/')

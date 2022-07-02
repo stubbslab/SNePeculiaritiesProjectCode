@@ -10,7 +10,16 @@ import os
 if __name__ == "__main__" :
     """
     Run MCMCs on artificial Pantheon+ - like data sets of toy SNe Ia.
-    $ python MeasureCosmicParamContoursFromToyModels.py LowZ 0 0.01 1
+
+    $ python MeasureCosmicParamContoursFromToyModels.py LowZ 0 0.01 Revision0 Revision0
+    $ python MeasureCosmicParamContoursFromToyModels.py MidZ 0 0.01 Revision0 Revision0
+    $ python MeasureCosmicParamContoursFromToyModels.py HighZ 0 0.01 Revision0 Revision0
+    $ python MeasureCosmicParamContoursFromToyModels.py LowZ 0 0.01 Revision0 Revision1 # <=== This run is to generate an result for no additional surveys; the 0 after LowZ tells the code to run with no additional surveys
+    $ python MeasureCosmicParamContoursFromToyModels.py LowZ 1 0.01 Revision0 Revision1
+    $ python MeasureCosmicParamContoursFromToyModels.py MidZ 1 0.01 Revision0 Revision1
+    $ python MeasureCosmicParamContoursFromToyModels.py HighZ 1 0.01 Revision0 Revision1
+
+    [REPEAT FOR ALL MU OFFSETS OF INTEREST - TYPICALLY 0.005, 0.01, 0.025, 0.05]
     """
     cl_args = sys.argv[1:]
     #top_survey = cl_args[0]
@@ -21,12 +30,44 @@ if __name__ == "__main__" :
     mu_offset = float(cl_args[2])
     mu_offsets = [mu_offset]
     print ('mu_offsets = ' + str(mu_offsets))
-    run_id = cl_args[3]
+    base_cosmology_suffix = cl_args[3]
+    run_id = cl_args[4]
     run_ids = [run_id]
+
+    fiducial_n_scalings = 1
+    #mu_offsets = [0.002, 0.005, 0.008, 0.015, 0.025, 0.03, 0.035]
+    #mu_offsets = [0.001, 0.018, 0.05]
+    ref_survey = 'PS1MD'
+    #Mostly pulled from Table 3 of https://arxiv.org/pdf/2112.03864.pdf
+    mu_offsets_scalings_dict = {'SWIFT':np.mean([0.012, 0.011]),
+                                'ASASSN':np.mean([0.022, 0.021, 0.02, 0.021, 0.020, 0.022, 0.021, 0.021]),
+                                'CFA1':np.mean([0.012, 0.01, 0.011, 0.011]), #Set sams as CFA3S
+                                'CFA2':np.mean([0.012, 0.01, 0.011, 0.011]),
+                                'LOWZ':np.mean([0.05]), #From https://iopscience.iop.org/article/10.1086/512054/pdf, "estimate the intrinsic dispersion about the relation is 0.05 mag"
+                                'KAITM':np.mean([0.012, 0.011, 0.010, 0.011, 0.012, 0.010, 0.011, 0.010, 0.013, 0.011, 0.010, 0.011, 0.012, 0.010, 0.010, 0.011]),
+                                'CFA4p2':np.mean([0.011, 0.011, 0.010, 0.011]),
+                                'KAIT':np.mean([0.012, 0.011, 0.010, 0.011, 0.012, 0.010, 0.011, 0.01, 0.013, 0.011, 0.010, 0.011, 0.012, 0.010, 0.010, 0.011]),
+                                'CFA3S':np.mean([0.012, 0.01, 0.011, 0.011]),
+                                'CSP':np.mean([0.011, 0.010, 0.010, 0.011, 0.011, 0.011, 0.011, 0.011]),
+                                'CFA3K':np.mean([0.012, 0.010, 0.012, 0.010]),
+                                'CFA4p1':np.mean([0.012, 0.010, 0.011, 0.012]),
+                                'PS1MD':np.mean([0.006, 0.006, 0.006, 0.006]),
+                                'SDSS':np.mean([0.006, 0.005, 0.006, 0.006]),
+                                'DES':np.mean([0.006, 0.006, 0.006, 0.006]),
+                                'SNLS':np.mean([0.005, 0.005, 0.005, 0.006]),
+                                'HST':np.mean([0.006, 0.006, 0.006, 0.006]),
+                                'SNAP':np.mean([0.006, 0.006, 0.006, 0.006]),
+                                'CANDELS':np.mean([0.006, 0.006, 0.006, 0.006])}
+    mu_offset_normalization = mu_offsets_scalings_dict[ref_survey]
+    mu_offsets_scalings_dict = {key:mu_offsets_scalings_dict[key] / mu_offset_normalization for key in mu_offsets_scalings_dict.keys()}
+    print ('mu_offset_scalings_dict = ' + str(mu_offsets_scalings_dict))
+
+
     #print ('top_surveys = ' + str(top_surveys))
     print ('Starting to fit Hubble constant from the command line... ')
-    results_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/mcmcResults/ToyModel/'
-    plot_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/plots/ToyModel/'
+    dir_base = '/Users/sashabrownsberger/Documents/Harvard/physics/'
+    results_dir = dir_base + 'stubbs/variableMuFits/mcmcResults/ToyModel/'
+    plot_dir = dir_base + 'stubbs/variableMuFits/plots/ToyModel/'
     #mu_offsets = [0.001, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2, 0.3, 0.5]
     #mu_offsets = [0.001, 0.003, 0.005, 0.007, 0.009, 0.011, 0.013, 0.015, 0.017, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2]
     #mu_offsets = [0.001, 0.005, 0.01, 0.015, 0.02, 0.05]
@@ -42,7 +83,7 @@ if __name__ == "__main__" :
     #overplot_steps = 500
     overplot_n_chains = 6
     full_steps = 10000
-    #full_steps = 1500
+    full_steps = 1500
     full_n_chains = 50
     #full_n_chains = 10
     #surveys = ['CANDELS', 'CFA1',  'CFA2', 'CFA3K', 'CFA3S', 'CFA4p1', 'CFA4p2', 'CSP', 'DES', 'FOUNDATION', 'HST', 'KAIT', 'LOWZ', 'PS1MD', 'SDSS', 'SNAP', 'SNLS', 'SWIFT', 'SWIFTNEW']
@@ -54,7 +95,8 @@ if __name__ == "__main__" :
 
     #all_surveys = ['A','B','C','D','E','F','G','H','I','J', 'H', 'I','J','K','L','M','N','O','P', 'Q']
     #base_surveys = ['CANDELS', 'CFA1', 'CFA2', 'CFA3K', 'CFA3S', 'CFA4p1', 'CFA4p2', 'CSP', 'DES', 'HST', 'KAIT', 'LOWZ', 'PS1MD', 'SDSS', 'SNAP', 'SNLS', 'SWIFT']
-    base_surveys = ['SWIFT', 'ASASSN', 'CFA1', 'CFA2', 'LOWZ', 'KAITM', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
+    base_surveys = ['SWIFT', 'ASASSN', 'CFA2', 'CFA1', 'KAITM', 'LOWZ', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
+    #base_surveys = ['SWIFT',    'ASASSN',   'CFA1',   'CFA2',   'LOWZ',    'KAITM',   'CFA4p2',  'KAIT',  'CFA3S',  'CSP',  'CFA3K',  'CFA4p1',   'PS1MD',  'SDSS',  'DES',  'SNLS',  'HST',  'SNAP',  'CANDELS']
     #base_surveys = ['CFA1', 'CFA2', 'CFA3K', 'CFA3S', 'CFA4p1', 'CFA4p2', 'CSP', 'KAIT','LOWZ', 'PS1MD', 'SWIFT']
     #base_surveys = ['SWIFT', 'ASASSN', 'CFA1']
     base_params_to_vary = cosmic_params_to_vary + ['mu' + survey for survey in base_surveys]
@@ -72,13 +114,13 @@ if __name__ == "__main__" :
         z_ranges = [[-np.inf, np.inf]]
     print ('[all_extra_surveys, z_ranges] = ' + str([all_extra_surveys, z_ranges] ))
     #top_surveys = ['A','B']
-    survey_errs_file = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe_' + 'BaseErrs' + '.csv'
-    base_cosmology_file = 'ToySNe_GPW' + str(int(1000 * mu_offset)) + 'mMags_' + z_lims_str + '_' + 'MCMC_' + 'toy_surveys' + '_REAL' + '_'.join(base_params_to_vary) + '_NS' + str(full_steps) + '_NC' + str(full_n_chains) + '_' + toy_sn_data_file_suffix + '0.txt'
-    mcmc_outputs_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/mcmcResults/ToyModel/'
+    survey_errs_file = dir_base + 'stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe_' + 'BaseErrs' + '.csv'
+    base_cosmology_file = 'ToySNe_GPW' + str(int(1000 * mu_offset)) + 'mMags_' + z_lims_str + '_' + 'MCMC_' + 'toy_surveys' + '_REAL' + '_'.join(base_params_to_vary) + '_NS' + str(full_steps) + '_NC' + str(full_n_chains) + '_' + toy_sn_data_file_suffix + base_cosmology_suffix + '.txt'
+    mcmc_outputs_dir = dir_base + 'stubbs/variableMuFits/mcmcResults/ToyModel/'
     if extra_survey_to_include_in_sequence > 0 and not(os.path.isfile(mcmc_outputs_dir + base_cosmology_file)):
         print ('We do not have the basic mcmc result file for mu offset ' + str(mu_offset) + 'mags, when we run under these same conditions without any additional surveys. ')
         print ('Looking for file ' + str(mcmc_outputs_dir + base_cosmology_file))
-        print ('You should rerun the analysis as: $ python MeasureCosmicParamContoursFromToyModels.py ' + str(toy_sn_data_file_suffix) +  ' 0 ' + str(mu_offset) + ' ' + str(0) + ' ')
+        print ('You should rerun the analysis as: $ python MeasureCosmicParamContoursFromToyModels.py ' + str(toy_sn_data_file_suffix) +  ' 0 ' + str(mu_offset) + ' ' + base_cosmology_suffix + ' ' + base_cosmology_suffix)
         sys.exit()
     elif extra_survey_to_include_in_sequence == 0:
         #If we're just running the analysis with no additional surveys,
@@ -95,8 +137,8 @@ if __name__ == "__main__" :
         OmegaM = np.median(OmM_col)
         w = np.median(w_col)
 
-    surveys_file = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe_muOffset' + str(int(1000 * mu_offset)) + '_' + toy_sn_data_file_suffix + '.csv'
-    covariance_file = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe_covariances_extra' + str(len(all_extra_surveys) * n_sn_per_survey) + '.txt'
+    surveys_file = 'stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe_muOffset' + str(int(1000 * mu_offset)) + '_' + toy_sn_data_file_suffix + '.csv'
+    covariance_file = 'stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe_covariances_extra' + str(len(all_extra_surveys) * n_sn_per_survey) + '.txt'
     #surveys_file = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe' + '_' + toy_sn_data_file_suffix + '.csv'
     if not(os.path.isfile(surveys_file)):
         #Need to make a new cosmology file
@@ -107,14 +149,14 @@ if __name__ == "__main__" :
                                sn_data_type = 'pantheon_plus', cepheid_file_name = 'calibratorset.txt',
                                HF_surveys_to_include = 'all', z_ranges = z_ranges, mu_err = 'median',
                                colors = ['r','b','g','orange','cyan','magenta','purple','darkblue','darkgreen', 'skyblue',],
-                               art_data_file = surveys_file )
-    if not(os.path.isfile(covariance_file)):
+                               art_data_file = surveys_file, dir_base = dir_base)
+    if not(os.path.isfile(dir_base + covariance_file)):
         #Need to make a new cosmology file
         print ('Making my own, new data file of SNe...')
-        cfc.generateToySNeCovarianceFile(len(all_extra_surveys) * n_sn_per_survey, covariance_file)
+        cfc.generateToySNeCovarianceFile(len(all_extra_surveys) * n_sn_per_survey, covariance_file, dir_base = dir_base)
 
     print ('surveys_file = ' + str(surveys_file))
-    toy_data = can.readInColumnsToList(surveys_file, delimiter = ', ', n_ignore = 1)
+    toy_data = can.readInColumnsToList(dir_base + surveys_file, delimiter = ', ', n_ignore = 1)
     surveys_col = 1
     colors_col = 5
     colors_dict = {toy_data[surveys_col][i]:toy_data[colors_col][i] for i in range(len(toy_data[0]))}
@@ -145,7 +187,11 @@ if __name__ == "__main__" :
             toy_fitter = cfc.CosmicFitter(w_of_funct_str = 'w0', randomize_sn = 0, sn_data_type = 'toy_surveys', sn_toy_data_file = surveys_file,
                                           params_to_overplot = cosmic_params_to_vary, overplot_mcmc_steps = overplot_steps, overplot_mcmc_chains = overplot_n_chains, mu_prior_type = mu_prior_type,
                                           muOffsetPriors = {survey:[0.0, 0.05] for survey in base_surveys + all_extra_surveys}, fit_res_dir = 'mcmcResults/ToyModel/',
-                                          covariance_file = covariance_file)
+                                          covariance_file = covariance_file, dir_base = dir_base)
+
+            for survey in base_surveys:
+                mu_offset_scaling = mu_offsets_scalings_dict[survey]
+                toy_fitter.muOffsetPriors[survey] = [0.0, fiducial_n_scalings * mu_offset_normalization * mu_offset_scaling]
             print ('toy_fitter.surveys = ' + str(toy_fitter.surveys))
             print ('surveys_to_include = ' + str(surveys_to_include))
             toy_fitter.updateUsedSN(z_lims = z_lims, surveys_to_include = surveys_to_include)
@@ -183,7 +229,7 @@ if __name__ == "__main__" :
 
     #If this is our first time doing this, we need ot delete the data file.
     if extra_survey_to_include_in_sequence == 0:
-        os.remove(surveys_file)
+        os.remove(dir_base + surveys_file)
 
     #axarr[0].legend(H0_scats, [str(n_surveys) + ' surveys' for n_surveys in surveys_to_include_in_sequence])
     #axarr[1].legend(OmM_scats, [str(n_surveys) + ' surveys' for n_surveys in surveys_to_include_in_sequence])

@@ -28,9 +28,16 @@ class DirectoryArchive:
     def getRandomizedBestFitParamsDir(self):
         return self.randomized_best_fit_params_dir
 
+    def getFieldFitsDir(self):
+        return self.field_fits_directory
+
+    def getDensityFitsDir(self): 
+        return self.density_fits_dir
+
     def __init__(self):
         self.chris_SNIsotropy_directory = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/SNIsotropyProject/'
         self.plot_directory = self.chris_SNIsotropy_directory + 'plots/'
+        self.field_fits_directory = self.chris_SNIsotropy_directory + 'SNeFieldFits/'
         self.sn_data_directory = self.chris_SNIsotropy_directory + 'OriginalSNDataFiles/'
         self.artificial_lsst_sn_data_directory = self.chris_SNIsotropy_directory + 'LSST_data_sets/'
         self.artificial_survey_sn_data_directory = self.chris_SNIsotropy_directory + 'other_art_survey_data_sets/'
@@ -40,3 +47,4 @@ class DirectoryArchive:
         self.randomized_best_fit_params_dir = self.chris_SNIsotropy_directory + 'randomBestFitParams/'
         self.random_draw_results_directory = self.chris_SNIsotropy_directory + 'randomDrawResults/'
         self.artificial_sn_data_directory = self.chris_SNIsotropy_directory + 'randomDrawResults/'
+        self.density_fits_dir = self.chris_SNIsotropy_directory + 'PantheonOverdensityFits/'

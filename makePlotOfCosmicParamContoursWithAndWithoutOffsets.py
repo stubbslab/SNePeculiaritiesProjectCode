@@ -9,12 +9,12 @@ import corner
 
 if __name__=="__main__":
     """
-    $ python makePlotOfCosmicParamContoursWithAndWithoutOffsets.py 0.001 0.025 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 #wierd chains - 2, 3, 7, 11, 13, 17, 18,
+    $ python makePlotOfCosmicParamContoursWithAndWithoutOffsets.py 0.001 0.018 Revised1 Revised2 Revised3 Revised4 Revised5 Revised6 Revised7 Revised8 Revised9 Revised10 Revised11 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 #wierd chains - 2, 3, 7, 11, 13, 17, 18,
     #  missing chains - 15
     """
     cl_args = sys.argv[1:]
     base_mu_offset, test_mu_offset, sequence_ids = [cl_args[0], cl_args[1], cl_args[2:]]
-    base_mu_offset, test_mu_offset, sequence_ids = [float(base_mu_offset), float(test_mu_offset), [int(id) for id in sequence_ids]]
+    base_mu_offset, test_mu_offset, sequence_ids = [float(base_mu_offset), float(test_mu_offset), [id for id in sequence_ids]]
     print ('[base_mu_offset, test_mu_offset, sequence_ids] = ' + str([base_mu_offset, test_mu_offset, sequence_ids]))
 
     contour_file_name = 'H0_OmM_w0_contoursWithAndWithout' + str(int(test_mu_offset * 1000)) + 'mMagMuOffset_' + '_'.join([str(id) for id in sequence_ids]) + '.pdf'
@@ -44,6 +44,7 @@ if __name__=="__main__":
     n_params = len(param_numbers_in_chain)
     labelsize = 20
     titlesize = 18
+    n_burn_in = 20000
 
     fancy_plot = 1
     if fancy_plot:
@@ -51,23 +52,23 @@ if __name__=="__main__":
         plt.rc('text', usetex=True)
         plt.rc('font', family='serif')
 
-    surveys = ['SWIFT', 'ASASSN', 'CFA1', 'CFA2', 'LOWZ', 'KAITM', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
+    surveys = ['SWIFT', 'ASASSN', 'CFA2', 'CFA1', 'KAITM', 'LOWZ', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
     #surveys = ['CANDELS', 'CFA1',  'CFA2', 'CFA3K', 'CFA3S',  ]
     #surveys = ['CANDELS', 'CFA1',  'CFA2', 'CFA3K', 'CFA3S']
-    base_full_mcmc_data_files = ['GaussPriorWidth' + str(int(base_mu_offset * 1000)) + 'mMags_zLim_Full_MCMC_pantheon_plus_REAL' + 'H0_OmM_w0' + '_mu' + '_mu'.join(surveys) + '_NS10000_NC50_Cov' + str(i) + '.txt' for i in sequence_ids]
-    test_full_mcmc_data_files = ['GaussPriorWidth' + str(int(test_mu_offset * 1000)) + 'mMags_zLim_Full_MCMC_pantheon_plus_REAL' + 'H0_OmM_w0' + '_mu' + '_mu'.join(surveys) + '_NS10000_NC50_Cov' + str(i) + '.txt' for i in sequence_ids]
+    base_full_mcmc_data_files = ['GaussPriorWidth' + str(int(base_mu_offset * 1000)) + 'mMags_zLim_Full_MCMC_pantheon_plus_REAL' + 'H0_OmM_w0' + '_mu' + '_mu'.join(surveys) + '_NS10000_NC50_' + str(i) + '.txt' for i in sequence_ids]
+    test_full_mcmc_data_files = ['GaussPriorWidth' + str(int(test_mu_offset * 1000)) + 'mMags_zLim_Full_MCMC_pantheon_plus_REAL' + 'H0_OmM_w0' + '_mu' + '_mu'.join(surveys) + '_NS10000_NC50_' + str(i) + '.txt' for i in sequence_ids]
 
     #First, make a big corner plot, normalized to the reference plot
-    base_data = can.readInColumnsToList(base_full_mcmc_data_files[0], file_dir = target_dir, n_ignore = 1, delimiter = ', ', convert_to_float = 1)
-    base_data = [np.array(col[0:-1]) - col[-1] for col in base_data]
+    base_data = can.readInColumnsToList(base_full_mcmc_data_files[0], file_dir = target_dir, n_ignore = 1, delimiter = ', ', convert_to_float = 1, verbose = 0)
+    base_data = [np.array(col[n_burn_in:-1]) - col[-1] for col in base_data]
     base_data_median = [np.median(col) for col in base_data]
-    test_data = can.readInColumnsToList(test_full_mcmc_data_files[0], file_dir = target_dir, n_ignore = 1, delimiter = ', ', convert_to_float = 1)
-    test_data = [np.array(col[0:-1]) - col[-1] for col in test_data]
+    test_data = can.readInColumnsToList(test_full_mcmc_data_files[0], file_dir = target_dir, n_ignore = 1, delimiter = ', ', convert_to_float = 1, verbose = 0)
+    test_data = [np.array(col[n_burn_in:-1]) - col[-1] for col in test_data]
     test_data[0], test_data[1], test_data[2] = [np.array(test_data[0]) - base_data_median[0], np.array(test_data[1]) - base_data_median[1], np.array(test_data[2]) - base_data_median[2]]
     labels = [r'$\Delta H_0$ (km s$^{-1}$ Mpcs$^{-1}$)', r'$\Delta \Omega_M$', r'$\Delta w$'] + [r'$\Delta \mu$' + ''.join([r'$_{}$'.format(char) for char in survey] ) for survey in surveys]
 
 
-    make_big_corner_plot = 1
+    make_big_corner_plot = 0
 
     if make_big_corner_plot:
         full_corner_truth_vals = [None, None, None] + [0 for i in range(len(base_data) - 3)]
@@ -86,6 +87,7 @@ if __name__=="__main__":
         print ('Working on i = ' + str(i))
         param_lims = param_lims_set[i]
         param_ticks = param_ticks_set[i]
+        bin_x_edges = np.linspace(*param_lims_set[i], n_bins + 1)
         print ('param_lims = ' + str(param_lims))
         print ('param_ticks = ' + str(param_ticks))
         param_col = param_numbers_in_chain[i] - 1
@@ -97,14 +99,19 @@ if __name__=="__main__":
         for j in range(len(test_full_mcmc_data_files)):
             base_mcmc_file = base_full_mcmc_data_files[j]
             test_mcmc_file = test_full_mcmc_data_files[j]
-            base_data = [float(elem) for elem in can.readInColumnsToList(base_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ')[param_col]]
+            base_data = [float(elem) for elem in can.readInColumnsToList(base_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ', verbose = 0)[param_col]]
             base_data_offset = base_data[-1]
-            base_data = base_data[0:-1]
-            test_data = [float(elem) for elem in can.readInColumnsToList(test_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ')[param_col]]
+            base_data = base_data[n_burn_in:-1]
+            #base_data = (np.array(base_data[n_burn_in:-1]) - base_data_offset).tolist()
+            test_data = [float(elem) for elem in can.readInColumnsToList(test_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ', verbose = 0)[param_col]]
             test_data_offset = test_data[-1]
+            #new_test_data = (np.array(new_test_data[n_burn_in:-1]) - test_data_offset).tolist()
             relative_offset = base_data_offset - test_data_offset
-            test_data = test_data[0:-1]
+            test_data = test_data[n_burn_in:-1]
+            #test_data = test_data + new_test_data
+            #base_data = base_data + new_base_data
             test_data = [elem + relative_offset for elem in test_data]
+            print ('[i, j, np.median(base_data), np.median(test_data)] = ' + str([i, j, np.median(base_data), np.median(test_data)]))
             base_data_median, base_data_std = [np.median(base_data), np.std(base_data)]
             print ('base_data_median = ' + str(base_data_median))
             all_data_median, all_data_std = [np.median(test_data + base_data), np.std(test_data + base_data)]
@@ -116,19 +123,21 @@ if __name__=="__main__":
             print ('param_lims_set[i] = ' + str(param_lims_set[i]))
             print ('param_ticks_set[i] = ' + str(param_ticks_set[i]))
             #param_lims_set[i] = [param_lims_set[i][0] + base_data_offset, param_lims_set[i][1] + base_data_offset]
-            bin_x_edges = np.linspace(*param_lims_set[i], n_bins + 1)
             #param_ticks_set[i] = [can.round_to_n(tick + base_data_offset, 2) for tick in param_ticks_set[i]]
             truth_vals[i] = truth_vals[i] + base_data_offset
             #bin_x_edges = [edge + base_data_offset for edge in bin_x_edges]
             base_binned_data = bd.binData(base_data, [1 for elem in base_data], bin_borders = bin_x_edges, trim = 0)[1]
             #test_binned_data = bd.binData([elem for elem in test_data], [1 for elem in base_data], bin_borders = bin_x_edges, trim = 0)[1]
             test_binned_data = bd.binData(test_data, [1 for elem in base_data], bin_borders = bin_x_edges, trim = 0)[1]
+            #print ('test_binned_data = ' + str(test_binned_data))
+            #print ('base_binned_data = ' + str(base_binned_data))
             #print ('base_binned_data = ' + str(base_binned_data))
             #print ('test_binned_data = ' + str(test_binned_data))
             base_hists[j] = np.array([0.0 if np.isnan(elem) else elem for elem in base_binned_data[0]]) * np.array(base_binned_data[2])
+            #base_hist = np.array([0.0 if np.isnan(elem) else elem for elem in base_binned_data[0]]) * np.array(base_binned_data[2])
             test_hists[j] = np.array([0.0 if np.isnan(elem) else elem for elem in test_binned_data[0]]) * np.array(test_binned_data[2])
-
-            print ('[test_data_offset, base_data_offset, relative_offset] = ' + str([test_data_offset, base_data_offset, relative_offset]))
+            #test_hist = np.array([0.0 if np.isnan(elem) else elem for elem in test_binned_data[0]]) * np.array(test_binned_data[2])
+            #print ('[test_data_offset, base_data_offset, relative_offset] = ' + str([test_data_offset, base_data_offset, relative_offset]))
             base_data_quantiles = np.quantile(base_data, [((special.erf(-1 / np.sqrt(2.0)) + 1 ) / 2 ), 0.5, ((special.erf(1 / np.sqrt(2.0)) + 1 ) / 2 )]) - base_data_median
             base_data_quantiles = [can.round_to_n(quant, 2) for quant in base_data_quantiles]
             test_data_quantiles = np.quantile(test_data, [((special.erf(-1 / np.sqrt(2.0)) + 1 ) / 2 ), 0.5, ((special.erf(1 / np.sqrt(2.0)) + 1 ) / 2 )]) - base_data_median
@@ -137,10 +146,10 @@ if __name__=="__main__":
             print ('base_data_quantiles = ' + str(base_data_quantiles))
             print ('test_data_quantiles = ' + str(test_data_quantiles))
             plot_titles[i] = (plot_titles[i]
-                              + "${" + str(base_data_quantiles[1]) + "}^{" + str(can.round_to_n(base_data_quantiles[1] - base_data_quantiles[0],2)) + "}_{" + str(can.round_to_n(base_data_quantiles[2] - base_data_quantiles[1],2)) + "}$" + ' (Base)'
-                              + '\n' + plot_titles[i]
-                              + "${" + str(test_data_quantiles[1]) + "}^{" + str(can.round_to_n(test_data_quantiles[1] - test_data_quantiles[0],2)) + "}_{" + str(can.round_to_n(test_data_quantiles[2] - test_data_quantiles[1],2)) + "}$" + r' ($\Delta \mu_S$)' )
-            #plot_titles[i] = plot_titles[i] + r'$E^{\alpha}_{\beta}$'
+                          + "${" + str(base_data_quantiles[1]) + "}^{" + str(can.round_to_n(base_data_quantiles[1] - base_data_quantiles[0],2)) + "}_{" + str(can.round_to_n(base_data_quantiles[2] - base_data_quantiles[1],2)) + "}$" + ' (Base)'
+                          + '\n' + plot_titles[i]
+                          + "${" + str(test_data_quantiles[1]) + "}^{" + str(can.round_to_n(test_data_quantiles[1] - test_data_quantiles[0],2)) + "}_{" + str(can.round_to_n(test_data_quantiles[2] - test_data_quantiles[1],2)) + "}$" + r' ($\Delta \mu_S$)' )
+        #plot_titles[i] = plot_titles[i] + r'$E^{\alpha}_{\beta}$'
 
         param_lims = param_lims_set[i]
         param_ticks = param_ticks_set[i]
@@ -148,6 +157,7 @@ if __name__=="__main__":
         print ('param_lims = ' + str(param_lims))
         print ('param_ticks = ' + str(param_ticks))
         base_med_hist = np.median(base_hists, axis = 0)
+        print ('base_hists = ' + str(base_hists) )
         test_med_hist = np.median(test_hists, axis = 0)
         ax.fill_between(bin_x_edges, np.concatenate(([0],test_med_hist)), step="pre", color = 'white', edgecolor = 'k')
         ax.fill_between(bin_x_edges, np.concatenate(([0],base_med_hist)), step="pre", color = 'r', edgecolor = 'k', alpha = 0.25)
@@ -190,20 +200,21 @@ if __name__=="__main__":
             for k in range(len(test_full_mcmc_data_files)):
                 base_mcmc_file = base_full_mcmc_data_files[k]
                 test_mcmc_file = test_full_mcmc_data_files[k]
-                base_x_data = [float(elem) for elem in can.readInColumnsToList(base_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ')[x_param_col]]
+                base_x_data = [float(elem) for elem in can.readInColumnsToList(base_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ', verbose = 0)[x_param_col]]
                 base_x_offset = base_x_data[-1]
-                base_x_data = base_x_data[0:-1]
-                base_y_data = [float(elem) for elem in can.readInColumnsToList(base_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ')[y_param_col]]
+                base_x_data = base_x_data[n_burn_in:-1]
+                base_y_data = [float(elem) for elem in can.readInColumnsToList(base_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ', verbose = 0)[y_param_col]]
                 base_y_offset = base_y_data[-1]
-                base_y_data = base_y_data[0:-1]
-                test_x_data = [float(elem) for elem in can.readInColumnsToList(test_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ')[x_param_col]]
+                base_y_data = base_y_data[n_burn_in:-1]
+                test_x_data = [float(elem) for elem in can.readInColumnsToList(test_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ', verbose = 0)[x_param_col]]
                 test_x_offset = test_x_data[-1]
                 x_relative_offset = base_x_offset - test_x_offset
-                test_x_data = [elem + x_relative_offset for elem in test_x_data[0:-1]]
-                test_y_data = [float(elem) for elem in can.readInColumnsToList(test_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ')[y_param_col]]
+                test_x_data = [elem + x_relative_offset for elem in test_x_data[n_burn_in:-1]]
+                test_y_data = [float(elem) for elem in can.readInColumnsToList(test_mcmc_file, file_dir = target_dir, n_ignore = 1, delimiter = ', ', verbose = 0)[y_param_col]]
                 test_y_offset = test_y_data[-1]
                 y_relative_offset = base_y_offset - test_y_offset
-                test_y_data = [elem + y_relative_offset for elem in test_y_data[0:-1]]
+                test_y_data = [elem + y_relative_offset for elem in test_y_data[n_burn_in:-1]]
+                print ('[j, k, np.median(base_x_data), np.median(test_x_data), np.median(base_y_data), np.median(test_y_data)] = ' + str([j, k, np.median(base_x_data), np.median(test_x_data), np.median(base_y_data), np.median(test_y_data)]))
                 base_mcmc_samples_to_plot = [base_x_data, base_y_data]
                 test_mcmc_samples_to_plot = [test_x_data, test_y_data]
                 base_x_mesh, base_y_mesh, base_mcmc_mesh = cfc.getContourMeshFromMCMCChainComponents(base_mcmc_samples_to_plot, x_param_lims, y_param_lims, n_bins )

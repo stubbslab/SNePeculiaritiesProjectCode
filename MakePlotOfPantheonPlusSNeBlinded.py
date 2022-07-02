@@ -19,11 +19,13 @@ if __name__ == "__main__":
     overplot_n_chains = 2
     z_cut_lims = [0.00, 2.5]
     z_lims = [0.005, 2.5]
-    surveys = ['SWIFT', 'ASASSN', 'CFA1', 'CFA2', 'LOWZ', 'KAITM', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
+    dir_base = '/Users/sashabrownsberger/Documents/Harvard/physics/' 
+
+    surveys = ['SWIFT', 'ASASSN', 'CFA2', 'CFA1', 'KAITM', 'LOWZ', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
     ticklabelsize = 18
     labelsize = 24
     point_transparency = 0.5
-    fitter_to_plot = cfc.CosmicFitter(w_of_funct_str = 'w0', randomize_sn = 0, sn_data_type = 'pantheon_plus', params_to_overplot = ['H0'], overplot_mcmc_steps = overplot_steps, overplot_mcmc_chains = overplot_n_chains)
+    fitter_to_plot = cfc.CosmicFitter(w_of_funct_str = 'w0', randomize_sn = 0, sn_data_type = 'pantheon_plus', params_to_overplot = ['H0'], overplot_mcmc_steps = overplot_steps, overplot_mcmc_chains = overplot_n_chains, dir_base = dir_base)
     fitter_to_plot.updateUsedSN(z_lims = z_cut_lims, surveys_to_include = surveys )
 
     fancy_plot = 1
@@ -33,7 +35,7 @@ if __name__ == "__main__":
         plt.rc('font', family='serif')
 
     #sorted_zs, sorted_mus, sorted_muErrs, colors = [fitter_to_plot.sorted_zs, fitter_to_plot.sorted_mus, fitter_to_plot.sorted_muErrs, fitter_to_plot.sorted_colors]
-    save_plot_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/plots/'
+    save_plot_dir = dir_base + 'stubbs/variableMuFits/plots/'
     plot_file_name = 'PantheonPlus_realMuResidsVsZ_boxes.pdf'
 
     #canon_mus = fitter_to_plot.getMusForCosmology(fitter_to_plot.nonCeph_zs, [fitter_to_plot.H0, fitter_to_plot.OmegaM, fitter_to_plot.OmegaLambda, fitter_to_plot.OmegaR , fitter_to_plot.Omega0], wOfFunction = lambda zs: fitter_to_plot.w_of_funct(zs, fitter_to_plot.default_w_params), )
@@ -55,7 +57,7 @@ if __name__ == "__main__":
     fill_mus = cfc.getMusForCosmology(fill_zs, [fitter_to_plot.H0, fitter_to_plot.OmegaM, fitter_to_plot.OmegaLambda, fitter_to_plot.OmegaR , fitter_to_plot.Omega0], wOfFunction )
     #print ('[len(fill_zs), len(fill_mus)] = ' + str([len(fill_zs), len(fill_mus)] ))
     read_in_surveys = fitter_to_plot.surveys
-    surveys = ['SWIFT', 'ASASSN', 'CFA1', 'CFA2', 'LOWZ', 'KAITM', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
+    surveys = ['SWIFT', 'ASASSN', 'CFA2', 'CFA1', 'KAITM', 'LOWZ', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
     for survey in read_in_surveys:
         if not(survey in surveys): print ('Survey ' + str(survey) + ' not in expected list of surveys')
     for survey in surveys:

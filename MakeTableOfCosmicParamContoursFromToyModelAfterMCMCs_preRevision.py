@@ -6,82 +6,22 @@ import cantrips as can
 import time
 import sys
 
-def mergeTables(file_suffixes, n_toy_data_sets = 4, n_sig_figs = 3):
-    """
-    To combine many tables:
-    python
-    import MakeTableOfCosmicParamContoursFromToyModelAfterMCMCs as mt
-    mt.mergeTables(['Revision1', 'Revision2', 'Revision3','Revision4', 'Revision5'])
-    """
-    dir_base = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/'
-    results_dir = dir_base + 'mcmcResults/ToyModel/'
-    files_to_read_in = ['Cosmic_Variance_with_ToySNe_' + extra_suffix_str + '.csv' for extra_suffix_str in file_suffixes]
-    data_tables = [can.readInColumnsToList(file_to_read_in, file_dir = results_dir, delimiter = 'DUMMY') for file_to_read_in in files_to_read_in]
-    data_tables = [[[ line[i].split('],[') for i in range(len(line)) ] for line in data_table] for data_table in data_tables]
-    read_in_data_tables = [[] for table in data_tables]
-    for i in range(len(data_tables)):
-        data_table = data_tables[i]
-        for line in data_table:
-            for line_elem in line[1:]:
-                for j in range(1, len(line_elem)):
-                    line_elem_elem = line_elem[j].split(',')
-                    workable_line = [float((single_val.split('[')[1] if '[' in single_val else single_val.split(']')[0] if ']' in single_val else single_val).strip()[1:-1]) for single_val in line_elem_elem]
-                    #print (workable_line)
-                    read_in_data_tables[i] = read_in_data_tables[i] + [workable_line]
-                #print ('')
-    table_means = np.mean(read_in_data_tables, axis = 0)
-    table_stds = np.std(read_in_data_tables, axis = 0)
-    for line in data_table[0]:
-        for line_elem in line:
-            print ('line_elem = ' + str(line_elem))
-        print ('')
-    print ([line_elem for line_elem in data_table[0][0]])
-
-    n_measurement_sets = len(table_means[0])
-    for i in range(n_measurement_sets):
-        mean_line = np.transpose(table_means)[i]
-        std_line = np.transpose(table_stds)[i]
-        header = [line_elem.split(', ')[i] for line_elem in data_table[0][0]]
-        header = [elem.split('[')[1][1:-1] if '[' in elem else elem.split(']')[0][1:-1] if ']' else elem[1:-1] for elem in header]
-        #print ('header = ' + str(header))
-        header = can.recursiveReplaceMultipleChars(header, replace_char = "\\")
-        #print ('header = ' + str(header))
-        print (' & '.join(header) + ' ' + '\\'.join(['','','']))
-        print ('\hline')
-        for j in range(n_toy_data_sets):
-            #print ("data_table[0][j+1][0].split(', ') = " + str(data_table[0][j+1][0].split(', ')))
-            start = data_table[0][j+1][0].split(', ')[i]
-            start = (start.split('[')[1][1:-1] if '[' in start else start.split(']')[0][1:-1] if ']' in start else start[1:-1])
-            start = can.recursiveReplaceMultipleChars(start, replace_char = '\\')
-            #print ('start = ' + str(start))
-            print ( start + ' & $ ' + ' $ & $ '.join([str(can.round_to_n(mean_line[k + j * n_toy_data_sets], (n_sig_figs + 1 if mean_line[k + j * n_toy_data_sets] >= 100 else n_sig_figs) )) + '\% \pm ' + str(can.round_to_n(std_line[k + j * n_toy_data_sets] / np.sqrt(len(file_suffixes)), n_sig_figs - 1)) + '\%' for k in range(n_toy_data_sets)]) + " $ "  + '\\'.join(['','','']))
-        print ('\hline')
-    """
-    print ('np.mean(read_in_data_tables, axis = 0): ' )
-    print (np.transpose(table_means))
-    print ('np.std(read_in_data_tables, axis = 0): ' )
-    print (np.transpose(table_stds))
-    """
-    return 0
-
 if __name__=="__main__":
     """
-    $ python MakeTableOfCosmicParamContoursFromToyModelAfterMCMCs.py Revision1 LowZ 0 LowZ 1 MidZ 1 HighZ 1
+    $ python MakeTableOfCosmicParamContoursFromToyModelAfterMCMCs.py LowZ 0 LowZ 1 MidZ 1 HighZ 1
     """
     cl_args = sys.argv[1:]
-    extra_suffix_str = cl_args[0]
-    toy_data_file_ids = [cl_args[i * 2 + 1] for i in range(len(cl_args) // 2)]
-    n_extra_surveys_to_plot = [int(cl_args[i * 2 + 2]) for i in range(len(cl_args) // 2)]
-    dir_base = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/'
-    results_dir = dir_base + 'mcmcResults/ToyModel/'
-    plot_dir = dir_base + 'plots/ToyModel/'
+    toy_data_file_ids = [cl_args[i * 2] for i in range(len(cl_args) // 2)]
+    n_extra_surveys_to_plot = [int(cl_args[i * 2 + 1]) for i in range(len(cl_args) // 2)]
+    results_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/mcmcResults/ToyModel/'
+    plot_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/plots/ToyModel/'
     mu_offsets = [0.001, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2, 0.3, 0.5]
     #mu_offsets = [0.001, 0.003, 0.005, 0.007, 0.009, 0.011, 0.013, 0.015, 0.017, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2]
     mu_offsets = [0.001, 0.005, 0.01, 0.03, 0.05, 0.1, 0.15, 0.2]
     mu_offsets = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]
-    mu_offsets = [0.006, 0.018, 0.03, 0.06]
+    mu_offsets = [0.005, 0.01, 0.025, 0.05]
     #mu_offsets = [ 0.01, 0.025]
-    ref_mu_offset = 0.03
+    ref_mu_offset = 0.01
     ref_mu_index = mu_offsets.index(ref_mu_offset)
     #mu_offsets = [0.001, 0.01, 0.1]
     z_lims_str = 'zLim_Full'
@@ -90,7 +30,7 @@ if __name__=="__main__":
     cosmicParams_plot_file_name = 'H0OmMw0_Unertainties_VsMuOffsetPrior_' + z_lims_str + '_ToyData.pdf'
     #mu_offsets = [0.0002, 0.2]
     full_steps = 10000
-    #full_steps = 1500
+    #full_steps = 2000
     full_n_chains = 50
     OmM_lims, w0_lims = [[0.0, 0.8], [-2.2, -0.3]]
     #full_n_chains = 10
@@ -98,13 +38,11 @@ if __name__=="__main__":
     n_iterations = 1
 
     bins = 50
-    n_burn_in = 2000
     fitter_levels = can.niceReverse([0.0] + (1.0 - np.exp(-(np.arange(1.0, 3.1, 1.0) ** 2.0 )/ 2.0)).tolist())
 
     #all_surveys = ['A','B','C','D','E','F','G','H','I','J', 'H', 'I','J','K','L','M','N','O','P', 'Q']
     #base_surveys = ['CANDELS', 'CFA1', 'CFA2', 'CFA3K', 'CFA3S', 'CFA4p1', 'CFA4p2', 'CSP', 'DES',  'HST', 'KAIT', 'LOWZ', 'PS1MD', 'SDSS', 'SNAP', 'SNLS', 'SWIFT']
-    base_surveys = ['SWIFT', 'ASASSN', 'CFA2', 'CFA1', 'KAITM', 'LOWZ', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
-    #base_surveys = ['SWIFT',    'ASASSN',   'CFA1',   'CFA2',   'LOWZ',    'KAITM',   'CFA4p2',  'KAIT',  'CFA3S',  'CSP',  'CFA3K',  'CFA4p1',   'PS1MD',  'SDSS',  'DES',  'SNLS',  'HST',  'SNAP',  'CANDELS']
+    base_surveys = ['SWIFT', 'ASASSN', 'CFA1', 'CFA2', 'LOWZ', 'KAITM', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
     all_surveys_set = [[], ['LowZ'], ['MidZ'], ['HighZ']]
     #all_surveys_set = [[], ['LowZ'], ['MidZ']]
     paper_col_headers = ['Just Pantheon+', '+ Low-$z$ Survey', '+ Mid-$z$ Survey', '+ High-$z$ Survey']
@@ -127,16 +65,17 @@ if __name__=="__main__":
     #    else:
     #        extra_surveys_to_include_in_sequence = extra_surveys_to_include_in_sequence  + [0]
     #extra_surveys_to_include_in_sequence = [all_surveys.index(survey)+1 for survey in surveys_to_plot]
+    print ('extra_surveys_to_include_in_sequence = ' + str(extra_surveys_to_include_in_sequence))
     f, axarr = plt.subplots(3,1, figsize = (5,6))
     H0_ylims, OmM_ylims, w_ylims = [ [0.21, 0.34], [0.28, 0.62], [0.07, 0.21] ]
     labelsize = 10
     H0_scats = []
     OmM_scats = []
     w_scats = []
-    H0_cols_to_print = [['Relative H$_0$ uncertainty when:'] + ['$N_{P,\sigma}  = ' + str((offset * 1000 / 6)) + '$ mmag' for offset in mu_offsets] ]
-    OmM_cols_to_print = [['Relative $\\Omega_M$ uncertainty when:'] + ['$N_{P,\sigma}   = ' + str(int(offset * 1000 / 6)) + '$ mmag' for offset in mu_offsets] ]
-    w_cols_to_print = [['Relative $w$ uncertainty reduction when:'] + ['$N_{P,\sigma}   = ' + str(int(offset * 1000 / 6)) + '$ mmag' for offset in mu_offsets] ]
-    OmM_times_w_to_print = [['Relative $\\Omega_M \\times w$ area when:'] + ['$N_{P,\sigma}   = ' + str(int(offset * 1000 / 6)) + '$ mmag' for offset in mu_offsets] ]
+    H0_cols_to_print = [['Relative H$_0$ uncertainty when:'] + ['$\sigma_{P,S}  = ' + str(int(offset * 1000)) + '$ mmag' for offset in mu_offsets] ]
+    OmM_cols_to_print = [['Relative $\\Omega_M$ uncertainty when:'] + ['$\sigma_{P,S}  = ' + str(int(offset * 1000)) + '$ mmag' for offset in mu_offsets] ]
+    w_cols_to_print = [['Relative $w$ uncertainty reduction when:'] + ['$\sigma_{P,S}  = ' + str(int(offset * 1000)) + '$ mmag' for offset in mu_offsets] ]
+    OmM_times_w_to_print = [['Relative $\\Omega_M \\times w$ area when:'] + ['$\sigma_{P,S}  = ' + str(int(offset * 1000)) + '$ mmag' for offset in mu_offsets] ]
 
     print ('extra_surveys_to_include_in_sequence = ' + str(extra_surveys_to_include_in_sequence))
     for j in range(len(extra_surveys_to_include_in_sequence)):
@@ -150,8 +89,7 @@ if __name__=="__main__":
         surveys_to_include = all_surveys[0:n_extra_surveys]
         print ('surveys_to_include = ' + str(surveys_to_include))
         params_to_vary = ['H0','OmM','w0'] + ['mu' + survey for survey in base_surveys] + ['mu' + survey for survey in surveys_to_include]
-        #save_files_dict = {mu_offset:['ToySNe_GPW' + str(int(1000 * mu_offset)) + 'mMags_' + z_lims_str + '_' + 'MCMC_' + 'toy_surveys' + '_REAL' + '_'.join(params_to_vary) + '_NS' + str(full_steps) + '_NC' + str(full_n_chains) + '_' + str(toy_data_file_id) + extra_suffix_str + str(iter) + '.txt' for iter in range(1, n_iterations + 1)] for mu_offset in mu_offsets}
-        save_files_dict = {mu_offset:['ToySNe_GPW' + str(int(1000 * mu_offset)) + 'mMags_' + z_lims_str + '_' + 'MCMC_' + 'toy_surveys' + '_REAL' + '_'.join(params_to_vary) + '_NS' + str(full_steps) + '_NC' + str(full_n_chains) + '_' + str(toy_data_file_id) + extra_suffix_str + '.txt' for iter in range(1, n_iterations + 1)] for mu_offset in mu_offsets}
+        save_files_dict = {mu_offset:['ToySNe_GPW' + str(int(1000 * mu_offset)) + 'mMags_' + z_lims_str + '_' + 'MCMC_' + 'toy_surveys' + '_REAL' + '_'.join(params_to_vary) + '_NS' + str(full_steps) + '_NC' + str(full_n_chains) + '_' + str(toy_data_file_id) + str(iter) + '.txt' for iter in range(1, n_iterations + 1)] for mu_offset in mu_offsets}
         x_vals = list(save_files_dict.keys())
         H0_val_stds_dict = {}
         H0_val_means_dict = {}
@@ -175,9 +113,9 @@ if __name__=="__main__":
                 mcmc_output_file = mcmc_output_files[i]
                 print ('mcmc_output_file = ' + str(mcmc_output_file))
                 mcmc_data = can.readInColumnsToList(results_dir + mcmc_output_file, delimiter = ', ', n_ignore = 1, convert_to_float = 1)
-                loaded_H0_data = [elem - mcmc_data[0][-1] for elem in mcmc_data[0][n_burn_in:-1]]
-                loaded_OmM_data = [elem - mcmc_data[1][-1] for elem in mcmc_data[1][n_burn_in:-1]]
-                loaded_w_data = [elem - mcmc_data[2][-1] for elem in mcmc_data[2][n_burn_in:-1]]
+                loaded_H0_data = [elem - mcmc_data[0][-1] for elem in mcmc_data[0][:-1]]
+                loaded_OmM_data = [elem - mcmc_data[1][-1] for elem in mcmc_data[1][:-1]]
+                loaded_w_data = [elem - mcmc_data[2][-1] for elem in mcmc_data[2][:-1]]
 
                 OmM_mesh, w_mesh, mcmc_mesh = cfc.getContourMeshFromMCMCChainComponents([loaded_OmM_data, loaded_w_data], OmM_lims, w0_lims, bins )
                 sorted_full_mcmc_mesh = np.flip(np.sort(mcmc_mesh.flatten()))
@@ -248,8 +186,6 @@ if __name__=="__main__":
     print (OmM_times_w_to_print)
     print ('w_cols_to_print: ')
     print (w_cols_to_print)
-
-    can.saveListsToColumns([H0_cols_to_print, OmM_cols_to_print, OmM_times_w_to_print, w_cols_to_print], 'Cosmic_Variance_with_ToySNe_' + extra_suffix_str + '.csv', results_dir, sep = ',')
 
     H0_rows_to_print = np.transpose(H0_cols_to_print)
     OmM_rows_to_print = np.transpose(OmM_cols_to_print)

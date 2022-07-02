@@ -17,6 +17,8 @@ class SNDataArchive:
             return self.artificial_surveys_sn_data_dir + self.artificial_surveys_sn_data_files[fileNum]
         elif data_type.lower() in ['old_real', 'real_old']:
             return self.sn_data_dir + self.old_sn_data_files[fileNum]
+        elif data_type.lower() in ['real_plus_old', 'pantheon_plus_old' ,'real_p_old']:
+            return self.sn_data_dir + self.pantheon_plus_old_blind_data_files[fileNum]
         elif data_type.lower() in ['real_plus', 'pantheon_plus' ,'real_p']:
             return self.sn_data_dir + self.pantheon_plus_blind_data_files[fileNum]
         else:
@@ -55,10 +57,11 @@ class SNDataArchive:
         self.old_sn_data_files = {1: 'SALT2mu_FITOPT000_MUOPT000.FITRES',
                                   2: 'SALT2mu_FITOPT011_MUOPT000.FITRES'}
         self.sn_data_files = {1: 'Ancillary_G10.FITRES'}
-        self.pantheon_plus_blind_data_files = {1:'PantheonPlusFinal.FITRES', 
+        self.pantheon_plus_old_blind_data_files = {1:'PantheonPlusFinal.FITRES',
                                               2:'data_WIC_Pantheon_plus_filled.txt',#Old data files
                                               3: 'FITOPT000_MUOPT000_PLUS.FITRES'  #Old data files
                                               }
+        self.pantheon_plus_blind_data_files = {1:'Pantheon+SH0ES_122221_Renamed.lcparam'} 
         self.artificial_pantheon_sn_data_files = {1:'FITOPT000_MUOPT000.FITRES'}
         self.artificial_surveys_sn_data_dir = dir_archive.getArtificialSurveySNDataDirectory()
         self.artificial_lsst_sn_data_dir = dir_archive.getArtificialLSSTSNDataDirectory()

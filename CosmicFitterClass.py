@@ -20,22 +20,75 @@ def param_fit_funct_full(zs, H0, OmM, w, OmL, OmR, Om0):
     return funct_mus
 
 def readInCovarianceFile(covariance_file):
-    f = open(covariance_file, 'r').readlines()
-    N = int(f[0])
+    f = can.readInColumnsToList(covariance_file)[0]
+
+    N = int(float(f[0]))
     covmat_unraveled = np.array(f[1:],dtype='float')
     covmat = covmat_unraveled.reshape((N,N)).tolist()
     return covmat
 
-def generateToySNeCovarianceFile(n_sn_to_add, new_covariance_file, baseline_covariance_file = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/SNIsotropyProject/OriginalSNDataFiles/covmat_NOSYS.txt'):
-    orig_covariance_lines = open(baseline_covariance_file, 'r').readlines()
-    n_orig_sn = int(orig_covariance_lines[0])
-    orig_covariance_lines = [float(elem) for elem in orig_covariance_lines]
-    n_new_lines = n_sn_to_add ** 2 + n_sn_to_add * n_orig_sn * 2
-    new_lines = ['0.0' for i in range(n_new_lines)]
-    all_covariance_lines = orig_covariance_lines + new_lines
-    all_covariance_lines[0] = n_orig_sn + n_sn_to_add
-    print ('new_covariance_file =  ' + str(new_covariance_file))
-    can.saveListsToColumns(all_covariance_lines, new_covariance_file, '' )
+def generateCovarianceFileForSubsetOfSurveys(new_covariance_file, HF_surveys_to_include,
+                                             baseline_covariance_file = 'stubbs/SNIsotropyProject/OriginalSNDataFiles/Pantheon+SH0ES_122221_1.cov',
+                                             cepheid_file_name = 'calibratorset.txt', calibrator_surveys_to_include = 'all',
+                                             dir_base = '', sn_data_type = 'pantheon_plus' , surveys_to_pair = { 'FOUNDATION':'PS1MD', 'SWIFTNEW':'SWIFT'}):
+    orig_covariances = [float(elem) for elem in can.readInColumnsToList(dir_base + baseline_covariance_file, verbose = 0)[0]]
+    orig_n_sn = int(orig_covariances[0])
+    orig_covariances = orig_covariances[1:]
+
+    print ('HF_surveys_to_include = ' + str(HF_surveys_to_include))
+    HF_surveys_to_include = HF_surveys_to_include + [key for key in surveys_to_pair.keys() if surveys_to_pair[key] in HF_surveys_to_include ]
+    print ('HF_surveys_to_include = ' + str(HF_surveys_to_include))
+
+    cepheid_sn_ids = lsn.loadCepheidSN(cepheid_file_name)
+
+    all_sn = lsn.loadSN(1, pull_extinctions = 0, verbose = 0, data_type = sn_data_type)
+    orig_surveys_in_order = [sn['survey'] for sn in all_sn]
+    all_surveys = np.unique(orig_surveys_in_order).tolist()
+    if HF_surveys_to_include == 'all':
+        HF_surveys_to_include = all_surveys
+    if calibrator_surveys_to_include == 'all':
+        calibrator_surveys_to_include = all_surveys
+    all_baseline_sn = can.flattenListOfLists([[sn for sn in all_sn if sn['survey'] == survey] for survey in all_surveys])
+    all_baseline_ids = [sn['SNID'] for sn in all_baseline_sn]
+    all_baseline_surveys = [sn['survey'] for sn in all_baseline_sn]
+    all_baseline_cephPaired = [True if id in cepheid_sn_ids else False for id in all_baseline_ids]
+    indeces_to_keep = [i for i in range(len(all_sn)) if ((all_baseline_cephPaired[i] and all_baseline_surveys[i] in calibrator_surveys_to_include) or all_baseline_surveys[i] in HF_surveys_to_include)]
+
+    print ('len(orig_surveys_in_order) = ' + str(len(orig_surveys_in_order)))
+    #indeces_to_keep = [i for i in range(orig_n_sn) if orig_surveys_in_order[i] in surveys_to_include ]
+    print ('len(indeces_to_keep) = ' + str(len(indeces_to_keep)) )
+    truncated_covariances = [ orig_covariances[j] for j in range(len(orig_covariances)) if (j % orig_n_sn in indeces_to_keep and j // orig_n_sn in indeces_to_keep) ]
+    truncated_covariances = orig_covariances.copy()
+    n_carry_through_covariances = 0
+    for j in range(len(orig_covariances)):
+        if (j % orig_n_sn in indeces_to_keep and j // orig_n_sn in indeces_to_keep) :
+            truncated_covariances[j] = orig_covariances[n_carry_through_covariances]
+            n_carry_through_covariances = n_carry_through_covariances + 1
+    truncated_covariances = truncated_covariances[0:n_carry_through_covariances]
+    print ('n_carry_through_covariances = ' + str(n_carry_through_covariances))
+    print ('len(truncated_covariances) = ' + str(len(truncated_covariances)))
+    can.saveListsToColumns([len(indeces_to_keep)] + truncated_covariances, new_covariance_file, dir_base, )
+
+    return 0
+
+def generateToySNeCovarianceFile(n_extra_sn, new_covariance_file, baseline_covariance_file = 'stubbs/SNIsotropyProject/OriginalSNDataFiles/Pantheon+SH0ES_122221_1.cov', dir_base = ''):
+    """
+    Take in the Pantheon+ SNe covariance file, and add new lines for new
+       artificial SNe.  These new lines are just 0's (assume no
+       covariances with artificial SNe).  The 0's just need to be placed
+       at the right spots to preserve the actual covariances between the
+       real data points.
+    """
+    orig_covariance = [float(elem) for elem in can.readInColumnsToList(dir_base + baseline_covariance_file, verbose = 0)[0]]
+    orig_n_sn = int(orig_covariance[0])
+    orig_covariance = orig_covariance[1:]
+    orig_lines = [orig_covariance[i * orig_n_sn:(i+1) * orig_n_sn] for i in range(orig_n_sn)]
+    new_lines = [orig_line + [0.0 for i in range(n_extra_sn)] for orig_line in orig_lines]
+    new_lines = new_lines + [[0.0 for i in range(n_extra_sn + orig_n_sn)] for j in range(n_extra_sn)]
+
+    new_covariances = can.flattenListOfLists(new_lines)
+    can.saveListsToColumns([int(orig_n_sn + n_extra_sn)] + new_covariances, dir_base + new_covariance_file, '')
+
     return 1
 
 
@@ -46,7 +99,8 @@ def generateToySNeData(randomize_orig_sn = 1,
                        sn_data_type = 'pantheon_plus', cepheid_file_name = 'calibratorset.txt',
                        HF_surveys_to_include = 'all', z_ranges = [[0.001, 0.1], [0.1, 1.0]], mu_err = 'median',
                        colors = ['r','b','g','orange','cyan','magenta','purple','darkblue','darkgreen', 'skyblue',],
-                        art_data_file = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe_CSP.csv'):
+                        art_data_file = 'stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe_CSP.csv', dir_base = ''):
+    art_data_file = dir_base  + art_data_file
     n_surveys = len(surveys)
     cepheid_sn_ids = lsn.loadCepheidSN(cepheid_file_name)
     orig_sn = lsn.loadSN(1, pull_extinctions = 0, verbose = 0, data_type = sn_data_type)
@@ -60,7 +114,6 @@ def generateToySNeData(randomize_orig_sn = 1,
     all_baseline_ids = [sn['SNID'] for sn in all_baseline_sn]
     all_baseline_surveys = [sn['survey'] for sn in all_baseline_sn]
     all_baseline_cephPaired = [True if id in cepheid_sn_ids else False for id in all_baseline_ids]
-    print ('[len(orig_sn), len(all_baseline_cephPaired), len(all_surveys)] = ' + str([len(orig_sn), len(all_baseline_cephPaired), len(all_surveys)] ))
     indeces_to_use = [i for i in range(len(orig_sn)) if (all_baseline_cephPaired[i] or all_baseline_surveys[i] in HF_surveys_to_include)]
 
     baseline_sn = [all_baseline_sn[i] for i in indeces_to_use]
@@ -102,23 +155,23 @@ def generateToySNeData(randomize_orig_sn = 1,
     astro_arch = apa.AstronomicalParameterArchive()
     cosmo_arch = cpa.CosmologicalParameterArchive()
     km_s_Mpc_in_Myr = astro_arch.getKmPerSToPcPerYr()
-    zs = can.flattenListOfLists([10.0 ** (np.random.random(n_sn_per_survey ) * (np.log10(z_range[1]) - np.log10(z_range[0])) + np.log10(z_range[0])) for z_range in z_ranges])
-    print ('zs = ' + str(zs))
+    zs = can.flattenListOfLists([10.0 ** (np.random.random(n_sn_per_survey ) * (np.log10(z_ranges[i][1]) - np.log10(z_ranges[i][0])) + np.log10(z_ranges[i][0])) for i in range(len(surveys))])
     sorted_zs = can.safeSortOneListByAnother(zs, [zs]) [0]
-    print ('sorted_zs = ' + str(sorted_zs))
     adjustedWOfFunction = lambda ts, taus, zs: loadedWOfFunction(zs)
 
     #residual_mu_calculator = calcMuForw.ResidualMuCalculatorForArbitraryWofT(wOfFunction = adjustedWOfFunction, initial_zs = sorted_zs, astro_archive = astro_arch, cosmo_archive = cosmo_arch,H0 = H0 * km_s_Mpc_in_Myr, OmM0 = OmegaM, OmL0 = OmegaLambda, Om0 = Omega0, OmR0 = OmegaR)
 
-    residual_mu_calculator = calcMuForw.ResidualMuCalculatorForArbitraryWofT(wOfFunction = adjustedWOfFunction, initial_zs = sorted_zs, astro_archive = astro_arch, cosmo_archive = cosmo_arch,H0 = H0 * km_s_Mpc_in_Myr, OmM0 = OmegaM, OmL0 = OmegaLambda, Om0 = Omega0, OmR0 = OmegaR)
-    sorted_mus = residual_mu_calculator.getMus()
-    sorted_muErrs = can.flattenListOfLists([[(median_errs[j] if mu_err == 'median' else mean_errs[j] if mu_err == 'mean' else mu_err)  for i in range(n_sn_per_survey)] for j in range(len(z_ranges))])
-    sorted_mus = [np.random.normal(sorted_mus[i], sorted_muErrs[i]) for i in range(len(sorted_mus))]
+    if len(sorted_zs) > 0:
+        residual_mu_calculator = calcMuForw.ResidualMuCalculatorForArbitraryWofT(wOfFunction = adjustedWOfFunction, initial_zs = sorted_zs, astro_archive = astro_arch, cosmo_archive = cosmo_arch,H0 = H0 * km_s_Mpc_in_Myr, OmM0 = OmegaM, OmL0 = OmegaLambda, Om0 = Omega0, OmR0 = OmegaR)
+        sorted_mus = residual_mu_calculator.getMus()
+        sorted_muErrs = can.flattenListOfLists([[(median_errs[j] if mu_err == 'median' else mean_errs[j] if mu_err == 'mean' else mu_err)  for i in range(n_sn_per_survey)] for j in range(len(z_ranges))])
+        sorted_mus = [np.random.normal(sorted_mus[i], sorted_muErrs[i]) for i in range(len(sorted_mus))]
+    else:
+        sorted_mus, sorted_muErrs = [[], []]
     all_surveys = can.flattenListOfLists([[survey for i in range(n_sn_per_survey)] for survey in surveys])
     unordered_indeces = list(range(len(sorted_zs)))
     random.shuffle(unordered_indeces )
     all_indeces, all_zs, all_mus, all_muErrs = can.safeSortOneListByAnother(unordered_indeces, [unordered_indeces, sorted_zs, sorted_mus, sorted_muErrs])
-    print ('[len(all_indeces), len(all_zs), len(all_mus), len(all_muErrs), len(all_surveys)] = ' + str([len(all_indeces), len(all_zs), len(all_mus), len(all_muErrs), len(all_surveys)] ))
     all_surveys = baseline_surveys + all_surveys
     all_zs = baseline_zs + all_zs
     all_mus = baseline_mus + all_mus
@@ -162,16 +215,19 @@ def getMusForCosmology(zs_to_calc_mus, scalar_params, wOfFunction, astro_archive
     return calc_mus
 
 def makePlotOfPosteriorContours(mcmc_output_files_sets, params_in_sequence, xlims, ylims,
+                                dir_base = '', x_scaling = 1,
                                 xlabel = '$\Omega_M$', ylabel = r'$w$', col_elem_width = 2, row_elem_width = 2,
-                                data_load_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/mcmcResults/',
+                                data_load_dir = 'stubbs/variableMuFits/mcmcResults/',
                                 delimiter = ', ', n_ignore = 1, n_ignore_end = 0, labelsize = 14,
                                 n_axarr_cols = 5, bins = 50, xticks = None, yticks = None, in_plot_loc = [0.5, 0.5],
                                 fitter_levels = can.niceReverse([0.0] + (1.0 - np.exp(-(np.arange(1.0, 3.1, 1.0) ** 2.0 )/ 2.0)).tolist()),
                                 show_fig = 0, save_fig = 0, save_fig_name = 'TestSaveMakePlotOfPosteriorContours.pdf',
-                                plot_save_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/plots/PosteriorWidths/',
+                                plot_save_dir = 'stubbs/variableMuFits/plots/PosteriorWidths/',
                                 text_loc = [0.05, 0.99], plot_text = None, in_plot_text_size = 8,
                                 contour_area_ax = None, area_contour_num = 0, contour_area_x_vals = None, area_plot_color = 'k', area_plot_marker = 'x',
-                                n_points_to_lin_fit = 0, in_plot_lin_text = ['', ''], ):
+                                n_points_to_lin_fit = 0, in_plot_lin_text = ['', ''], n_burn_in = 20000):
+    data_load_dir = dir_base + data_load_dir
+    plot_save_dir = dir_base + plot_save_dir
     n_axarr_rows = ((len(mcmc_output_files_sets) - 1) // n_axarr_cols) + 1
     n_axarr_elems = n_axarr_rows * n_axarr_cols
     f, axarr = plt.subplots(n_axarr_rows, n_axarr_cols, squeeze = False, figsize = (col_elem_width * n_axarr_cols, row_elem_width * n_axarr_rows))
@@ -186,9 +242,9 @@ def makePlotOfPosteriorContours(mcmc_output_files_sets, params_in_sequence, xlim
             mcmc_output_file = mcmc_output_files[j]
             mcmc_data_set = can.readInColumnsToList(data_load_dir + mcmc_output_file, n_ignore = n_ignore, n_ignore_end = n_ignore_end, delimiter = delimiter)
             #print ('mcmc_data_set = ' + str(mcmc_data_set))
-            x_data = [float(elem) - float(mcmc_data_set[params_in_sequence[0] - 1][-1]) for elem in mcmc_data_set[params_in_sequence[0] - 1]]
+            x_data = [float(elem) - float(mcmc_data_set[params_in_sequence[0] - 1][-1]) for elem in mcmc_data_set[params_in_sequence[0] - 1][n_burn_in:-1]]
             x_data = np.array(x_data) - np.median(x_data)
-            y_data = [float(elem) - float(mcmc_data_set[params_in_sequence[1] - 1][-1]) for elem in mcmc_data_set[params_in_sequence[1] - 1]]
+            y_data = [float(elem) - float(mcmc_data_set[params_in_sequence[1] - 1][-1]) for elem in mcmc_data_set[params_in_sequence[1] - 1][n_burn_in:-1]]
             y_data = np.array(y_data) - np.median(y_data)
             x_mesh, y_mesh, mcmc_mesh = getContourMeshFromMCMCChainComponents([x_data, y_data], xlims, ylims, bins )
             mcmc_mesh_stack[j] = mcmc_mesh
@@ -196,8 +252,8 @@ def makePlotOfPosteriorContours(mcmc_output_files_sets, params_in_sequence, xlim
         sorted_full_mcmc_mesh = np.flip(np.sort(full_mcmc_mesh.flatten()))
         full_levels = determineContourLevelsFromMCMCPosterior(sorted_full_mcmc_mesh, fitter_levels, samples_already_sorted = 1)
         contours = ax.contour(x_mesh, y_mesh, full_mcmc_mesh, levels =  full_levels)
-        contour_vertices = [contours.allsegs[-1 - i][0] for i in range(1, len(full_levels)  )] #nth outer contour is -1 - n
-        contour_areas = [np.abs(can.measureAreaOfContour(contour)) for contour in contour_vertices]
+        contour_vertices = [contours.allsegs[-1 - i] for i in range(1, len(full_levels)  )] #nth outer contour is -1 - n
+        contour_areas = [np.sum([np.abs(can.measureAreaOfContour(vertices_set)) for vertices_set in contour]) for contour in contour_vertices]
         print ('contour_areas = ' + str(contour_areas))
         areas_to_plot[i] = contour_areas[area_contour_num]
         if i == 0:
@@ -237,16 +293,34 @@ def makePlotOfPosteriorContours(mcmc_output_files_sets, params_in_sequence, xlim
         f2, contour_area_ax = plt.subplots(1,1)
     if contour_area_x_vals == None:
         contour_area_x_vals = range(len(areas_to_plot))
-    contour_area_ax.scatter(contour_area_x_vals, np.array(areas_to_plot) / areas_to_plot[0] * 100 - 100, color = area_plot_color, marker = area_plot_marker )
+    print ('contour_area_x_vals = ' + str(contour_area_x_vals))
+    contour_area_x_vals_to_plot = [val * x_scaling for val in contour_area_x_vals]
+    print ('contour_area_x_vals_to_plot = ' + str(contour_area_x_vals_to_plot))
+    contour_area_ax.scatter(contour_area_x_vals_to_plot, np.array(areas_to_plot) / areas_to_plot[0] * 100 - 100, color = area_plot_color, marker = area_plot_marker )
+    x_lims, y_lims = [contour_area_ax.get_xlim(), contour_area_ax.get_ylim()]
+    print ('x_lims = ' + str(x_lims))
     if n_points_to_lin_fit > 1:
-        x_vals_to_plot, y_vals_to_plot = [contour_area_x_vals, np.array(areas_to_plot) / areas_to_plot[0] * 100 - 100]
-        lin_fit = np.polyfit(x_vals_to_plot[:n_points_to_lin_fit], y_vals_to_plot[:n_points_to_lin_fit], 1)
+        x_vals_to_plot, y_vals_to_plot = [ [val * x_scaling for val in contour_area_x_vals], np.array(areas_to_plot) / areas_to_plot[0] * 100 - 100]
+        print ('x_vals_to_plot = ' + str(x_vals_to_plot))
+        lin_fit = np.polyfit(contour_area_x_vals[:n_points_to_lin_fit], y_vals_to_plot[:n_points_to_lin_fit], 1)
+        try:
+
+            plateau_fit = scipy.optimize.curve_fit(plateauFitFunct, np.array(contour_area_x_vals), np.array(y_vals_to_plot), p0 = (lin_fit[0], 1, 1))
+        except RuntimeError:
+            print ('PLATEAU FIT FAILED')
+            plateau_fit = [ (lin_fit[0], 1, 1), [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0],  [0.0, 0.0, 1.0]] ]
+
+        print ('plateau_fit = ' + str(plateau_fit))
         x_lims, y_lims = [contour_area_ax.get_xlim(), contour_area_ax.get_ylim()]
-        contour_area_ax.plot(x_lims, np.poly1d(lin_fit)(x_lims), c = 'r', linestyle = '--', alpha = 0.5)
+        #contour_area_ax.plot(x_lims, np.poly1d(lin_fit)(x_lims), c = 'r', linestyle = '--', alpha = 0.5)
+        contour_area_ax.plot(np.linspace(0.0, x_lims[1], 51), plateauFitFunct(np.linspace(0.0, x_lims[1], 51) / x_scaling, *plateau_fit[0]), c = 'r', linestyle = '--', alpha = 0.5)
+        print ('x_lims = ' + str(xlims))
+        print('plateauFitFunct(np.linspace(0.0, x_lims[1], 51) / x_scaling, *plateau_fit[0]) = ' + str(plateauFitFunct(np.linspace(0.0, x_lims[1], 51) / x_scaling, *plateau_fit[0])))
         contour_area_ax.set_xlim(x_lims)
         contour_area_ax.set_ylim(y_lims)
         #ax.text(r'$\\frac{}{d \\sigma_{G,S}} = $' + str(can.round_to_n(lin_fit[0], 3)), color = 'blue')
-        contour_area_ax.text(in_plot_loc[0], in_plot_loc[1],  in_plot_lin_text[0] + str(can.round_to_n(lin_fit[0] / 1000 * 25, 3)) +  in_plot_lin_text[1], color = 'blue', transform = contour_area_ax.transAxes, fontsize = in_plot_text_size)
+        #contour_area_ax.text(in_plot_loc[0], in_plot_loc[1],  in_plot_lin_text[0] + str(can.round_to_n(lin_fit[0] / 1000 * 25, 3)) +  in_plot_lin_text[1], color = 'blue', transform = contour_area_ax.transAxes, fontsize = in_plot_text_size)
+        contour_area_ax.text(in_plot_loc[0], in_plot_loc[1],  in_plot_lin_text[0] + str(can.round_to_n(plateau_fit[0][0] * plateau_fit[0][1], 2)) +  in_plot_lin_text[1], color = 'blue', transform = contour_area_ax.transAxes, fontsize = in_plot_text_size)
     return axarr, contour_area_ax
 
 def determineContourLevelsFromMCMCPosterior(mcmc_samples, fraction_levels, samples_already_sorted = 0):
@@ -282,45 +356,62 @@ def getContourMeshFromMCMCChainComponents(mcmc_samples_to_plot,  xlims, ylims, b
     for l in range(len(mcmc_samples_to_plot[0])):
         x_val, y_val = [mcmc_samples_to_plot[0][l], mcmc_samples_to_plot[1][l]]
         x_index = [index for index in range(len(x_bin_centers)) if mcmc_samples_to_plot[0][l] < x_bin_edges[index+1] and mcmc_samples_to_plot[0][l] >= x_bin_edges[index]]
-
         x_index = x_index[0]
         y_index = [index for index in range(len(y_bin_centers)) if mcmc_samples_to_plot[1][l] < y_bin_edges[index+1] and mcmc_samples_to_plot[1][l] >= y_bin_edges[index]]
         #print ('[[y_bin_edges[index], y_bin_edges[index + 1]] for index in range(len(y_bin_centers))] = ' + str([[y_bin_edges[index], y_bin_edges[index + 1]] for index in range(len(y_bin_centers))]))
-
         y_index = y_index[0]
         mcmc_mesh[y_index, x_index] = mcmc_mesh[y_index, x_index] + 1
     return [x_mesh, y_mesh, mcmc_mesh]
 
+"""
+def plateauFitFunct(xs, A, n):
+    print ('[A, n] = ' + str([A, n]))
+    fitted_vals = A * (xs ** n)
+    return fitted_vals
+"""
+
+def plateauFitFunct(xs, A, p, alpha):
+    #print ('[A, p] = ' + str([A, p]))
+    fitted_vals = A * (p - 1 / (xs ** alpha + 1/p) )
+    return fitted_vals
+
 def makePlotOfPosteriorWidths(mcmc_output_files_by_x_val_dict, param_in_sequence,
+                              dir_base = '', bins = 50, x_scaling = 1, show_errs = 0,
                               xlabel = '$\Delta \mu_S$ Gaussian prior width (mags)', ylabel = r'$H_0$ MCMC posterior $\sigma$ (km/s/Mpc)', title = '',
-                              data_load_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/mcmcResults/',
+                              data_load_dir = 'stubbs/variableMuFits/mcmcResults/',
                               delimiter = ', ', n_ignore = 1, n_ignore_end = 0, ax = None, labelsize = 8, xlims = None, ylims = None,
                               zero_uncertainties_at_zero_prior = 1, plot_sigmas = 1, n_points_to_lin_fit = 0, in_plot_lin_text = ['', ''], in_plot_loc = [0.5, 0.5], in_plot_text_size = 8,
                               ref_param_vals_for_other_ax = None, plot_color = 'k', plot_marker = 'x', show_all_chain_posteriors = 0,
                               show_fig = 0, save_fig = 0, save_fig_name = 'TestSaveMakePlotOfPosteriorWidths.pdf',
-                              plot_save_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/plots/PosteriorWidths/',
-                              plot_load_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/plots/PosteriorWidths/'):
+                              plot_save_dir = 'stubbs/variableMuFits/plots/PosteriorWidths/',
+                              plot_load_dir = 'stubbs/variableMuFits/plots/PosteriorWidths/', n_burn_in = 20000):
     #param in sequence is: is this the first, second, third param analyzed?
+    data_load_dir = dir_base  + data_load_dir
+    plot_save_dir = dir_base + plot_save_dir
+    plot_load_dir = dir_base + plot_load_dir
     x_vals = list(mcmc_output_files_by_x_val_dict.keys())
     y_val_stds_dict = {}
     y_val_means_dict = {}
+    print ('mcmc_output_files_by_x_val_dict = ' + str(mcmc_output_files_by_x_val_dict))
     for x_val in x_vals:
         mcmc_output_files = mcmc_output_files_by_x_val_dict[x_val]
         read_in_vals = [[] for i in range(len(mcmc_output_files))]
         for i in range(len(mcmc_output_files)):
             mcmc_output_file = mcmc_output_files[i]
-            mcmc_data = can.readInColumnsToList(data_load_dir + mcmc_output_file, delimiter = ', ', n_ignore = n_ignore, convert_to_float = 1, n_ignore_end = 0)
-            loaded_data = mcmc_data[param_in_sequence]
+            mcmc_data = can.readInColumnsToList(data_load_dir + mcmc_output_file, delimiter = ', ', n_ignore = n_ignore, convert_to_float = 1, n_ignore_end = 0, verbose = 0)
+            loaded_data = mcmc_data[param_in_sequence][n_burn_in:]
+            #print ('loaded_data = ' + str(loaded_data))
             loaded_data = [elem - loaded_data[-1] for elem in loaded_data[0:-1]]
+            #print ('loaded_data = ' + str(loaded_data))
             data_std, data_mean = [np.std(loaded_data), np.mean(loaded_data)]
             read_in_vals[i] = [data_std, data_mean]
         y_val_stds_dict[x_val] = [read_in_val[0] for read_in_val in read_in_vals]
         y_val_means_dict[x_val] = [read_in_val[1] for read_in_val in read_in_vals]
         print ('y_val_stds_dict = ' + str(y_val_stds_dict))
         print ('y_val_means_dict = ' + str(y_val_means_dict))
-    x_vals_to_plot = x_vals
-    mean_param_stds = [np.mean(y_val_stds_dict[x_val]) for x_val in x_vals_to_plot]
-    mean_param_means = [np.mean(y_val_means_dict[x_val]) for x_val in x_vals_to_plot]
+    x_vals_to_plot = [val * x_scaling for val in x_vals]
+    mean_param_stds = [np.mean(y_val_stds_dict[x_val]) for x_val in x_vals]
+    mean_param_means = [np.mean(y_val_means_dict[x_val]) for x_val in x_vals]
     if zero_uncertainties_at_zero_prior:
         zerod_y_val_std = mean_param_stds[0]
     else:
@@ -329,23 +420,32 @@ def makePlotOfPosteriorWidths(mcmc_output_files_by_x_val_dict, param_in_sequence
     print ('zerod_y_val_std = ' + str(zerod_y_val_std ))
     if plot_sigmas:
         y_vals_to_plot = [np.sqrt(y_val ** 2.0 - zerod_y_val_std ** 2.0) if y_val >= zerod_y_val_std else -np.sqrt(zerod_y_val_std ** 2.0 - y_val ** 2.0) for y_val in mean_param_stds]
-        y_vals_to_plot_errs = [np.std(y_val_stds_dict[x_val])  for x_val in x_vals_to_plot]
+        y_vals_to_plot_errs = [np.std(y_val_stds_dict[x_val])  for x_val in x_vals]
     else:
         print ('mean_param_means = ' + str(mean_param_means))
         y_vals_to_plot = [y_val - mean_param_means[0] for y_val in mean_param_means]
-        y_vals_to_plot_errs = [np.std(y_val_means_dict[x_val])  for x_val in x_vals_to_plot]
+        y_vals_to_plot_errs = [np.std(y_val_means_dict[x_val])  for x_val in x_vals]
     print ('[x_vals_to_plot, y_vals_to_plot, y_vals_to_plot_errs] = ' + str([x_vals_to_plot, y_vals_to_plot, y_vals_to_plot_errs]))
 
     if show_all_chain_posteriors:
-        [ax.scatter([x_val for y_val in y_val_stds_dict[x_val]], np.array(y_val_stds_dict[x_val]) - zerod_y_val_std, c = 'r', marker = '.') for x_val in x_vals]
+        [ax.scatter([x_vals_to_plot[i] for y_val in y_val_stds_dict[x_vals[i]]], np.array(y_val_stds_dict[x_vals[i]]) - zerod_y_val_std, c = 'r', marker = '.') for i in range(len(x_vals_to_plot))]
     scat = ax.scatter(x_vals_to_plot, y_vals_to_plot, c = plot_color, marker = plot_marker)
-    ax.errorbar(x_vals_to_plot, y_vals_to_plot, yerr = y_vals_to_plot_errs, color = 'k', fmt = 'none')
+    if show_errs: ax.errorbar(x_vals_to_plot, y_vals_to_plot, yerr = y_vals_to_plot_errs, color = 'k', fmt = 'none')
     if n_points_to_lin_fit > 1:
-        lin_fit = np.polyfit(x_vals_to_plot[:n_points_to_lin_fit], y_vals_to_plot[:n_points_to_lin_fit], 1)
+        lin_fit = np.polyfit(x_vals[:n_points_to_lin_fit], y_vals_to_plot[:n_points_to_lin_fit], 1)
+        try:
+            plateau_fit = scipy.optimize.curve_fit(plateauFitFunct, np.array(x_vals), np.array(y_vals_to_plot), p0 = (lin_fit[0], 1, 1))
+        except(RuntimeError):
+            print ('PLATEAU FIT FAILED')
+            plateau_fit = [ (lin_fit[0], 1, 1), [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0],  [0.0, 0.0, 1.0]] ]
+        print ('plateau_fit = ' + str(plateau_fit))
         xlims, ylims = [ax.get_xlim(), ax.get_ylim()]
-        ax.plot(xlims, np.poly1d(lin_fit)(xlims), c = 'r', linestyle = '--', alpha = 0.5)
+        #ax.plot(xlims, np.poly1d(lin_fit)(xlims), c = 'r', linestyle = '--', alpha = 0.5)
+        print ('Text here is: ' + in_plot_lin_text[0])
+        ax.plot(np.linspace(0.0, xlims[1], 51), plateauFitFunct(np.linspace(0.0, xlims[1], 51) / x_scaling, *plateau_fit[0]), c = 'r', linestyle = '--', alpha = 0.5)
         #ax.text(r'$\\frac{}{d \\sigma_{G,S}} = $' + str(can.round_to_n(lin_fit[0], 3)), color = 'blue')
-        ax.text(in_plot_loc[0], in_plot_loc[1], in_plot_lin_text[0] + str(can.round_to_n(lin_fit[0] / 1000 * 25, 3)) +  in_plot_lin_text[1], color = 'blue', transform = ax.transAxes, fontsize = in_plot_text_size)
+        #ax.text(in_plot_loc[0], in_plot_loc[1], in_plot_lin_text[0] + str(can.round_to_n(lin_fit[0] / 1000 * 25, 3)) +  in_plot_lin_text[1], color = 'blue', transform = ax.transAxes, fontsize = in_plot_text_size)
+        ax.text(in_plot_loc[0], in_plot_loc[1], in_plot_lin_text[0] + str(can.round_to_n(plateau_fit[0][0] * plateau_fit[0][1], 2)) +  in_plot_lin_text[1], color = 'blue', transform = ax.transAxes, fontsize = in_plot_text_size)
     if not(xlims == None):
         ax.set_xlim(xlims)
     if not(ylims == None):
@@ -604,10 +704,13 @@ class CosmicFitter:
             all_ids[i] = sn_id
         """
         all_zs, all_mus, all_muErrs, all_snPlotColors, all_sn, all_ids, all_surveys = [orig_zs, orig_mus, orig_muErrs, orig_snPlotColors, orig_sn, orig_ids, orig_surveys]
+        print ('self.covariance_file = ' + str(self.covariance_file))
         off_diag_covariance = readInCovarianceFile(self.covariance_file)
-        diag_cov = [[0.0 for i in range(len(all_muErrs))] for j in range(len(all_muErrs))]
-        for i in range(len(all_muErrs)): diag_cov[i][i] = all_muErrs[i] ** 2.0
-        full_covariance = (np.array(off_diag_covariance) + np.array(diag_cov).tolist())
+        print ('len(all_muErrs) = ' + str(len(all_muErrs)))
+        diag_covariance = [[0.0 for i in range(len(all_muErrs))] for j in range(len(all_muErrs))]
+        for i in range(len(all_muErrs)): diag_covariance[i][i] = all_muErrs[i] ** 2.0
+        full_covariance = (np.array(off_diag_covariance) + np.array(diag_covariance)).tolist()
+        #full_covariance = np.array(diag_covariance)
         semi_sorted_cov_matrix =  can.safeSortOneListByAnother(all_zs, full_covariance)
         sorted_zs, sorted_sn, sorted_muErrs, sorted_mus, sorted_surveys, sorted_ids, sorted_plot_colors, sorted_cov_matrix = can.safeSortOneListByAnother(all_zs, [all_zs, all_sn, all_muErrs, all_mus, all_surveys, all_ids, all_snPlotColors, semi_sorted_cov_matrix])
         cepheid_indeces = np.unique( [ i for i in range(len(sorted_ids)) if sorted_ids[i] in cepheid_sn_ids ] )
@@ -768,8 +871,45 @@ class CosmicFitter:
         calc_mus = (np.array(calc_mus) - luminosity_mu_offset).tolist()
         return calc_mus
 
+    def readInSurveyMuOffsetCorrellationMatrix(self, correllation_file, delimiter = ','):
+        """
+        Reads in the correllation matrix in a reference file into
+           the class memory.
+        """
+        cols = can.readInColumnsToList(correllation_file, delimiter = delimiter, n_ignore = 0)
+        out_surveys = [survey.strip() for survey in cols[0][1:]]
+        correllation_matrix = {out_surveys[i]:{col[0].strip():float(col[i+1]) for col in cols[1:]} for i in range(len(out_surveys))}
+        return correllation_matrix
+
+    def computeMuOffsetsFromCorrellationMatrix(self, uncorrellated_mu_offsets_by_survey_dict, correllation_matrix = None):
+        """
+        Multiply vector of mu offsets (numbers actually varied in
+            MCMC) through the mu offsets correllation matrix by
+            survey.  Also normalizes the offsets so that the
+            total correllation in each matrix row is unity.
+        No correllation means multiplying through by the unit
+            matrix.
+        """
+        if correllation_matrix == None:
+            correllation_matrix = self.survey_mu_correllation_matrix
+        surveys_to_correllate = list(uncorrellated_mu_offsets_by_survey_dict.keys())
+        correllated_mu_offsets_by_survey_dict = {}
+        for survey in surveys_to_correllate:
+            if survey in correllation_matrix:
+                correllation_matrix_line = correllation_matrix[survey]
+                normalization = np.sum([correllation_matrix_line[survey] if survey in correllation_matrix_line.keys() else 0.0 for survey in surveys_to_correllate])
+                new_offset = np.sum([correllation_matrix_line[survey] * uncorrellated_mu_offsets_by_survey_dict[survey] if survey in correllation_matrix_line.keys() else 0.0 for survey in surveys_to_correllate])
+                new_offset = new_offset / normalization
+            else:
+                new_offset = uncorrellated_mu_offsets_by_survey_dict[survey]
+            correllated_mu_offsets_by_survey_dict[survey] = new_offset
+        #print ('uncorrellated_mu_offsets_by_survey_dict = ' + str(uncorrellated_mu_offsets_by_survey_dict))
+        #print ('correllated_mu_offsets_by_survey_dict = ' + str(correllated_mu_offsets_by_survey_dict))
+        return correllated_mu_offsets_by_survey_dict
+
     def getMuOffsetsBySurvey(self, muOffsets, fix_mean_offset_survey = None):
         mu_offsets_by_survey_dict = { self.surveys[i]:muOffsets[i] for i in range(len(self.surveys)) }
+        mu_offsets_by_survey_dict = self.computeMuOffsetsFromCorrellationMatrix(mu_offsets_by_survey_dict)
         if fix_mean_offset_survey != None:
             mu_offsets_by_mu = [mu_offsets_by_survey_dict[self.nonCeph_surveys[i]] if mu_offsets_by_survey_dict[self.nonCeph_surveys[i]] in mu_offsets_by_survey_dict[self.nonCeph_surveys[i]].keys() else 0.0 for i in range(len(self.nonCeph_mus))]
             weighted_mean_applied_offset = np.average(mu_offsets_by_mu, np.array(self.nonCeph_muErrs) ** -2.0 )
@@ -1131,7 +1271,7 @@ class CosmicFitter:
                         mcmc_sampler = None, target_dir = None, overplot_basic_plot = 0, bins = 50, n_single_chain_cols = 4, n_sig_figs = 5,
                         burn_in_steps = 1000, thinning = 5,
                          percentiles_to_print = [(scipy.special.erf(n_sig / np.sqrt(2.0)) + 1 ) / 2 * 100 for n_sig in [-1,0,1]],
-                         save_fig = 0, show_fig = 1, contourf_cmap = 'plasma', contour_c = 'k', labelsize = 24, titlesize = 22, cols_to_center = [0,1,2],
+                         save_fig = 0, save_single_chain = 0, show_fig = 1, contourf_cmap = 'plasma', contour_c = 'k', labelsize = 24, titlesize = 22, cols_to_center = [0,1,2],
                         full_fig_name = 'MCMC_fitter_results.pdf', ref_fig_name = 'MCMC_full_fitter_results_vs_ref.pdf', single_chain_title = 'MCMC_single_chain_results.pdf',
                         fitter_levels = can.niceReverse([0.0] + (1.0 - np.exp(-(np.arange(1.0, 3.1, 1.0) ** 2.0 )/ 2.0)).tolist()), background_fitter_levels = can.niceReverse([0.0] + (1.0 - np.exp(-(np.arange(1.0, 3.1, 1.0) ** 2.0 )/ 2.0)).tolist()),
                         fix_mean_offset_survey = None, ref_plot_alpha = 0.5, forced_plot_lims = None, overplot_elem_size = 5, forced_luminosity_offset = None, verbose = 1 ):
@@ -1254,19 +1394,19 @@ class CosmicFitter:
             plt.show()
         else:
             plt.close('all')
-        """
-        print ('Here 1 !!! single_chain_title: ' + single_chain_title  )
-        if save_fig:
-            n_single_chain_rows = int(np.ceil(len(varied_params) / n_single_chain_cols))
-            f_s_chain, axarr_s_chain = plt.subplots(n_single_chain_rows, n_single_chain_cols, figsize = (5 * n_single_chain_cols, 2 * n_single_chain_rows ), squeeze = False)
-            full_samples = self.mcmc_sampler.get_chain()
-            for i in range(len(varied_params)):
-                axarr_s_chain[i // n_single_chain_cols, i % n_single_chain_cols].plot(full_samples[:, :, i], 'k', alpha = 0.3)
-                axarr_s_chain[i // n_single_chain_cols, i % n_single_chain_cols].set_xlim(0, len(full_samples))
-                axarr_s_chain[i // n_single_chain_cols, i % n_single_chain_cols].set_ylabel(varied_params[i])
-            print ('target_dir + single_chain_title = ' + str(target_dir + single_chain_title) )
-            plt.savefig(target_dir + single_chain_title )
-        """
+        if save_single_chain:
+            print ('Here 1 !!! single_chain_title: ' + single_chain_title  )
+            if save_fig:
+                n_single_chain_rows = int(np.ceil(len(varied_params) / n_single_chain_cols))
+                f_s_chain, axarr_s_chain = plt.subplots(n_single_chain_rows, n_single_chain_cols, figsize = (5 * n_single_chain_cols, 2 * n_single_chain_rows ), squeeze = False)
+                full_samples = self.mcmc_sampler.get_chain()
+                for i in range(len(varied_params)):
+                    axarr_s_chain[i // n_single_chain_cols, i % n_single_chain_cols].plot(full_samples[:, :, i], 'k', alpha = 0.3)
+                    axarr_s_chain[i // n_single_chain_cols, i % n_single_chain_cols].set_xlim(0, len(full_samples))
+                    axarr_s_chain[i // n_single_chain_cols, i % n_single_chain_cols].set_ylabel(varied_params[i])
+                print ('target_dir + single_chain_title = ' + str(target_dir + single_chain_title) )
+                plt.savefig(target_dir + single_chain_title )
+
         return 1
 
     # (self.sorted_mus, self.canon_mus, self.sorted_muErrs, self.sorted_surveys)
@@ -1354,10 +1494,11 @@ class CosmicFitter:
         return weighted_mu_mean_diffs
 
     def __init__(self, w_of_funct_str = 'w0', default_mu_offset = 0.0,
-                 root_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/', plot_dir = 'plots/', fit_res_dir = 'mcmcResults/',
+                 root_dir = 'stubbs/variableMuFits/', plot_dir = 'plots/', fit_res_dir = 'mcmcResults/', dir_base = '',
                  cepheid_file_name = 'calibratorset.txt', randomize_sn = 0, force_rand_fit_to_background_cosmology = 0,
-                 covariance_file = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/SNIsotropyProject/OriginalSNDataFiles/covmat_NOSYS.txt',
-                 sn_toy_data_file = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe_C.csv',
+                 covariance_file = 'stubbs/SNIsotropyProject/OriginalSNDataFiles/Pantheon+SH0ES_122221_1.cov', #covmat_NOSYS.txt',
+                 sn_toy_data_file = 'stubbs/variableMuFits/ArtificialSurveys/ArtificialSNe_C.csv',
+                 survey_mu_correllation_file = 'stubbs/SNIsotropyProject/OriginalSNDataFiles/PantheonPlusZeropointCorrellationsBySurvey.txt',
                  canonical_cosmic_vals = {'H0':70.0, 'L':1.0, 'OmM':0.3, 'OmL':0.7, 'OmR': 0.0001, 'Om0': 1.0, 'w0':-1,'wa':0}, #These values of H0 and OmM are the best fit ones if we only allow them to vary in a cosmic fit. So they are good starting values
                  H0_bounds = [30.0, 110.0], OmegaM_bounds = [0.0, 1.0], OmegaLambda_bounds = [0.0, 1.0], Omega0_bounds = [0.5, 1.5], OmegaR_bounds = [0.0, 0.1],
                  sn_data_type = 'pantheon_plus', mu_offset_bounds = [-1.0, 1.0], forced_plot_lims = {'OmM':[0.05, 0.55], 'w0':[-1.45, -0.45], 'H0':[67.5, 72.5] },
@@ -1370,16 +1511,19 @@ class CosmicFitter:
         print ('[H0, OmegaM, OmegaLambda, OmegaR, Omega0, w0, wa] = ' + str([H0, OmegaM, OmegaLambda, OmegaR, Omega0, w0, wa]))
         if init_guess_params_to_overplot == None and params_to_overplot != None:
             init_guess_params_to_overplot = [ canonical_cosmic_vals[param] for param in params_to_overplot ]
+        self.dir_base = dir_base
         self.astro_arch = apa.AstronomicalParameterArchive()
         self.cosmo_arch = cpa.CosmologicalParameterArchive(H0 = H0, OmegaM = OmegaM, OmegaLambda = OmegaLambda, Omega0 = Omega0, OmegaR = OmegaR, params_source = 'pantheon')
         self.scalar_params = [self.cosmo_arch.getH0()[0], self.cosmo_arch.getOmegaM()[0], self.cosmo_arch.getOmegaLambda()[0], self.cosmo_arch.getOmegaR()[0], self.cosmo_arch.getOmega0()[0]]
         self.age_of_universe = self.cosmo_arch.getAgeOfUniverse( units = 'yr' )[0]
         self.forced_plot_lims = forced_plot_lims
         self.z_lims = z_lims
-        self.root_dir = root_dir
+        self.root_dir = dir_base + root_dir
         self.plot_dir = plot_dir
         self.mcmc_results_dir = fit_res_dir
         self.default_w_of_funct = lambda zs: -1.0 if type(zs) in [int, float] else -1.0 + np.zeros(np.shape(zs))
+
+        self.survey_mu_correllation_matrix = self.readInSurveyMuOffsetCorrellationMatrix(dir_base  + survey_mu_correllation_file)
 
         self.canonical_cosmic_vals = canonical_cosmic_vals
         self.cosmic_param_bounds = [H0_bounds, OmegaM_bounds, OmegaLambda_bounds, OmegaR_bounds, Omega0_bounds]
@@ -1393,8 +1537,8 @@ class CosmicFitter:
         self.sn_data_type = sn_data_type
         self.muOffsetPriors = muOffsetPriors
         self.mu_prior_type = mu_prior_type
-        self.sn_toy_data_file = sn_toy_data_file
-        self.covariance_file = covariance_file
+        self.sn_toy_data_file = dir_base + sn_toy_data_file
+        self.covariance_file = dir_base + covariance_file
         print ('self.sn_toy_data_file = ' + str(self.sn_toy_data_file))
         #if self.sn_data_type == 'art_pantheon':
         #    self.offsets_by_survey_order = ['CANDELS', 'CFA1', 'CFA2', 'CFA3K', 'CFA3S', 'CFA4p1', 'CFA4p2', 'CSP', 'DES', 'FOUNDATION', 'PS1MD', 'SDSS', 'SNLS']
@@ -1459,14 +1603,39 @@ if __name__ == "__main__" :
     cl_args = sys.argv[1:]
     save_files_suffix = cl_args[0]
     print ('Starting to fit Hubble constant from the command line... ')
-    results_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/mcmcResults/'
-    plot_dir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/variableMuFits/plots/PosteriorWidths/'
+    dir_base = '/Users/sashabrownsberger/Documents/Harvard/physics/'
+    results_dir = dir_base  + 'stubbs/variableMuFits/mcmcResults/'
+    plot_dir = dir_base  + 'stubbs/variableMuFits/plots/PosteriorWidths/'
     #mu_offsets = [0.001, 0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6]
     #mu_offsets = [0.35, 0.45]
     #mu_offsets = [0.01, 0.25, 0.3, 0.4, 0.5, 0.6]
-    mu_offsets = [0.001, 0.01, 0.02, 0.04, 0.06, 0.08, 0.12, 0.14, 0.16, 0.18, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6]
-    mu_offsets = [0.002, 0.005, 0.008, 0.015, 0.18, 0.025, 0.03, 0.035]
-    mu_offsets = [0.001]
+    mu_offsets = [0.001, 0.014, 0.018, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5,0.55, 0.6]
+    #mu_offsets = [0.002, 0.005, 0.008, 0.015, 0.025, 0.03, 0.035]
+    #mu_offsets = [0.001, 0.018, 0.05]
+    ref_survey = 'PS1MD'
+    #Mostly pulled from Table 3 of https://arxiv.org/pdf/2112.03864.pdf
+    mu_offsets_scalings_dict = {'SWIFT':np.mean([0.012, 0.011]),
+                                'ASASSN':np.mean([0.022, 0.021, 0.02, 0.021, 0.020, 0.022, 0.021, 0.021]),
+                                'CFA1':np.mean([0.012, 0.01, 0.011, 0.011]), #Set sams as CFA3S
+                                'CFA2':np.mean([0.012, 0.01, 0.011, 0.011]),
+                                'LOWZ':np.mean([0.05]), #From https://iopscience.iop.org/article/10.1086/512054/pdf, "estimate the intrinsic dispersion about the relation is 0.05 mag"
+                                'KAITM':np.mean([0.012, 0.011, 0.010, 0.011, 0.012, 0.010, 0.011, 0.010, 0.013, 0.011, 0.010, 0.011, 0.012, 0.010, 0.010, 0.011]),
+                                'CFA4p2':np.mean([0.011, 0.011, 0.010, 0.011]),
+                                'KAIT':np.mean([0.012, 0.011, 0.010, 0.011, 0.012, 0.010, 0.011, 0.01, 0.013, 0.011, 0.010, 0.011, 0.012, 0.010, 0.010, 0.011]),
+                                'CFA3S':np.mean([0.012, 0.01, 0.011, 0.011]),
+                                'CSP':np.mean([0.011, 0.010, 0.010, 0.011, 0.011, 0.011, 0.011, 0.011]),
+                                'CFA3K':np.mean([0.012, 0.010, 0.012, 0.010]),
+                                'CFA4p1':np.mean([0.012, 0.010, 0.011, 0.012]),
+                                'PS1MD':np.mean([0.006, 0.006, 0.006, 0.006]),
+                                'SDSS':np.mean([0.006, 0.005, 0.006, 0.006]),
+                                'DES':np.mean([0.006, 0.006, 0.006, 0.006]),
+                                'SNLS':np.mean([0.005, 0.005, 0.005, 0.006]),
+                                'HST':np.mean([0.006, 0.006, 0.006, 0.006]),
+                                'SNAP':np.mean([0.006, 0.006, 0.006, 0.006]),
+                                'CANDELS':np.mean([0.006, 0.006, 0.006, 0.006])}
+    mu_offset_normalization = mu_offsets_scalings_dict[ref_survey]
+    mu_offsets_scalings_dict = {key:mu_offsets_scalings_dict[key] / mu_offset_normalization for key in mu_offsets_scalings_dict.keys()}
+    print ('mu_offset_scalings_dict = ' + str(mu_offsets_scalings_dict))
     #mu_offsets = [0.14, 0.16, 0.18, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6]
     #mu_offsets = [0.001, 0.01, 0.04, 0.08, 0.1, 0.14, 0.18, 0.2, 0.3, 0.4, 0.5, 0.6]
     #mu_offsets = [0.1]
@@ -1484,7 +1653,7 @@ if __name__ == "__main__" :
     #mu_offsets = [0.0002, 0.2]
     posterior_fits = [0.0 for i in range(len(mu_offsets))]
     overplot_steps = 10000
-    overplot_steps = 1500
+    overplot_steps = 10000
     overplot_n_chains = 6
     full_steps = 10000
     #full_steps = 1500
@@ -1497,19 +1666,19 @@ if __name__ == "__main__" :
     #cosmic_params_to_vary_init_guess = [70.0, 0.3]
     #surveys = ['CANDELS', 'CFA1', 'CFA2', 'CFA3K', 'CFA3S', 'CFA4p1', 'CFA4p2', 'CSP', 'DES', 'HST', 'KAIT', 'LOWZ', 'PS1MD', 'SDSS', 'SNAP', 'SNLS', 'SWIFT']
     #{'CANDELS': 1.5791014285714287, 'CFA1': 0.023386, 'CFA2': 0.019155937499999998, 'CFA3K': 0.03073, 'CFA3S': 0.025453863636363636, 'CFA4p1': 0.03031708333333333, 'CFA4p2': 0.021545384615384616, 'CSP': 0.02634633663366336, 'DES': 0.3892227979274612, 'FOUNDATION': 0.03817131428571429, 'HST': 1.0970235294117647, 'KAIT': 0.022085254237288136, 'LOWZ': 0.0233895, 'PS1MD': 0.2865038078291815, 'SDSS': 0.20657667525773193, 'SNAP': 1.2256033333333334, 'SNLS': 0.6388950854700854, 'SWIFT': 0.005737, 'SWIFTNEW': 0.0155971875}
-    surveys = ['SWIFT', 'ASASSN', 'CFA1', 'CFA2', 'LOWZ', 'KAITM', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
+    surveys = ['SWIFT', 'ASASSN', 'CFA2', 'CFA1', 'KAITM', 'LOWZ', 'CFA4p2', 'KAIT', 'CFA3S', 'CSP', 'CFA3K', 'CFA4p1', 'PS1MD', 'SDSS', 'DES', 'SNLS', 'HST', 'SNAP', 'CANDELS']
     #surveys = ['CANDELS', 'CFA1' ]
     mu_prior_type = 'gauss'
     #surveys = ['SDSS']
-    rand_fitter = CosmicFitter(w_of_funct_str = 'w0', randomize_sn = 0, sn_data_type = 'pantheon_plus', params_to_overplot = cosmic_params_to_vary, overplot_mcmc_steps = overplot_steps, overplot_mcmc_chains = overplot_n_chains, mu_prior_type = mu_prior_type)
+    rand_fitter = CosmicFitter(w_of_funct_str = 'w0', randomize_sn = 0, sn_data_type = 'pantheon_plus', params_to_overplot = cosmic_params_to_vary, overplot_mcmc_steps = overplot_steps, overplot_mcmc_chains = overplot_n_chains, mu_prior_type = mu_prior_type, dir_base = dir_base)
     #rand_fitter = CosmicFitter(w_of_funct_str = 'w0', randomize_sn = 1, sn_data_type = 'pantheon_plus', params_to_overplot = None, overplot_mcmc_steps = overplot_steps, overplot_mcmc_chains = overplot_n_chains, mu_prior_type = mu_prior_type)
     rand_fitter.updateUsedSN(z_lims = z_lims, surveys_to_include = surveys )
     surveys = list(rand_fitter.surveys)
-    print ('surveys = ' + str(surveys))
     for i in range(len(mu_offsets)):
         mu_offset = mu_offsets[i]
         for survey in surveys:
-            rand_fitter.muOffsetPriors[survey] = [0.0, mu_offset]
+            mu_offset_scaling = mu_offsets_scalings_dict[survey]
+            rand_fitter.muOffsetPriors[survey] = [0.0, mu_offset * mu_offset_scaling]
         rand_fitter.doFullCosmicFit(cosmic_params_to_vary_init_guess + [0.0 for survey in surveys], cosmic_params_to_vary + ['mu' + survey for survey in surveys], n_mcmc_steps = full_steps, n_mcmc_chains = full_n_chains , verbose = 0, additional_save_prefix = 'GaussPriorWidth' + str(int(1000 * mu_offset)) + 'mMags_' + z_lims_str + '_', additional_save_suffix = '_' + save_files_suffix, save_mcmc = 1, show_mcmc = 0, save_full_mcmc = 1 )
         posterior_fits[i] = rand_fitter.computeBestFitResultsFromMCMC(cosmic_params_to_vary + ['mu' + survey for survey in surveys], verbose_weighted_means = 0)
 

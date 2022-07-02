@@ -19,7 +19,7 @@ def loadCepheidSN(cepheid_data_file = 'calibratorset.txt', cepheid_data_dir = '/
 
 
 def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_extinctions = 0, save_cols = [], file_name = 'Sn_data_file.csv', relevent_indeces = 'all', zHD = 1,
-           OmM = 0.3, OmL = 0.7, OmR = 0.0, H0 = 70.0, Om0 = 1.0, verbose = 1):
+           OmM = 0.3, OmL = 0.7, OmR = 0.0, H0 = 70.0, Om0 = 1.0, verbose = 0):
 
     sn_archive = SNDataArchive()
     sn_storer = RawSNDataStorer(data_set, data_type = data_type, relevent_indeces = relevent_indeces, verbose = verbose)
@@ -46,15 +46,17 @@ def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_ext
     sn_mBErrs = sn_storer.getDataArray('mBERR')
     sn_mBErrs = [float(mBErr) for mBErr in sn_mBErrs]
     #print 'Read in mBs. '
-    sn_mus = sn_storer.getDataArray('MU')
-    sn_mus = [float(mu) for mu in sn_mus]
-    sn_muErrs = sn_storer.getDataArray('MUERR')
+    #sn_mus = sn_storer.getDataArray('MU')
+    sn_mus = sn_storer.getDataArray('mB')
+    sn_mus = [float(mu) - sn_storer.getBigM()  for mu in sn_mus]
+    #sn_muErrs = sn_storer.getDataArray('MUERR')
+    sn_muErrs = sn_storer.getDataArray('mBERR')
     sn_muErrs = [float(muErr) for muErr in sn_muErrs]
     #print 'Read in mus. '
     sn_dls = [10.0 ** ((mu - 25.0) / 5.0) for mu in sn_mus]
     sn_dlErrs = [sn_muErrs[i] * 1 / 5.0 * np.log(10) * 10.0 ** ((sn_mus[i] - 25.0) / 5.0) for i in range(len(sn_mus)) ]
-    sn_mus_pred =  sn_storer.getDataArray('MUMODEL')
-    sn_mus_pred = [float(mu) for mu in sn_mus_pred]
+    #sn_mus_pred =  sn_storer.getDataArray('MUMODEL')
+    #sn_mus_pred = [float(mu) for mu in sn_mus_pred]
     sn_surveys = sn_storer.getSurveys()
 
     sn_ids = (sn_storer.getDataArray('CID') if sn_storer.checkIfKeywordInDict('CID') else sn_storer.getDataArray('ID'))
@@ -78,7 +80,7 @@ def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_ext
     mu_diffs = [sn_mus[i] - expected_mus[i] for i in range(len(sn_mBs))]
     sn_extinctions = []
 
-    sn_given_extinctions = sn_storer.getDataArray('MWEBV')
+    #sn_given_extinctions = sn_storer.getDataArray('MWEBV')
 
     all_surveys = np.unique(sn_surveys)
     sn_weighted_means_by_survey = {}
@@ -108,10 +110,12 @@ def loadSN(data_set, surveys_of_interest = ['all'], data_type = 'real', pull_ext
 
 
 
-    sns = [ {'RA':sn_ras[i], 'Dec':sn_decs[i], 'z':sn_zs[i], 'zHD':sn_zHDs[i], 'zCMB':sn_zCMBs[i], 't':sn_ts[i], 'tau':sn_taus[i], 'mu':sn_mus[i], 'muDiff':mu_diffs[i],
-             'muErr':sn_muErrs[i], 'muPred':sn_mus_pred[i], 'dl':sn_dls[i], 'dlErr':sn_dlErrs[i], 'survey':sn_surveys[i],
+    sns = [ {'RA':sn_ras[i], 'Dec':sn_decs[i], 'z':sn_zs[i], 'zHD':sn_zHDs[i], 'zCMB':sn_zCMBs[i], 't':sn_ts[i], 'tau':sn_taus[i], 'mu':sn_mus[i], 'muErr':sn_muErrs[i],
+             #'muDiff':mu_diffs[i], 'muPred':sn_mus_pred[i],
+             'dl':sn_dls[i], 'dlErr':sn_dlErrs[i], 'survey':sn_surveys[i],
              'color':sn_colors[i], 'extinction':sn_extinctions[i], 'extinctionErr':sn_ext_errs[i], 'muDiffWMean':sn_weighted_means_by_survey[sn_surveys[i]],
-             'given_extinction':sn_given_extinctions[i], 'SNID':sn_ids[i] }
+             #'given_extinction':sn_given_extinctions[i],
+              'SNID':sn_ids[i] }
             for i in range(len(sn_zs)) if sn_surveys[i] in surveys_of_interest]
 
     if len(save_cols) > 0:

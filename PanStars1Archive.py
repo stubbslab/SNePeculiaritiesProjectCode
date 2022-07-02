@@ -89,7 +89,7 @@ class PanStars1Archive:
         for i in range(len(interp_points)):
             interp_point = interp_points[i]
             print ('Working on point number ' + str(i) + ' of ' + str(len(interp_points))  +  '... ')
-            gal_counts_at_sample_coords[i] = len(self.countNGalsAroundCoord(*interp_point, search_comov_rad_Mpc), verbose = verbose)
+            gal_counts_at_sample_coords[i] = len(self.countNGalsAroundCoord(interp_point[0], interp_point[1], interp_point[2], search_comov_rad_Mpc), verbose = verbose)
         self.gal_counts_at_sample_coords = gal_counts_at_sample_coords
 
         sky_n_gals_interp = scipy.interpolate.LinearNDInterpolator(np.array(self.interp_points), gal_counts_at_sample_coords)
@@ -221,7 +221,7 @@ class PanStars1Archive:
 
         start2 = time.time()
         min_ang_sep = np.arcsin(annulus_outer_comoving_rad / np.sqrt(targ_r ** 2.0 + annulus_outer_comoving_rad ** 2.0))
-        possible_gal_indeces = list(range(*z_bound_indeces))
+        possible_gal_indeces = list(range(z_bound_indeces[0], z_bound_indeces[1]))
         #print ('possible_gal_indeces = ' + str(possible_gal_indeces))
         dec_ang_seps = [abs(dec - targ_Dec) * deg_to_rad for dec in np.array(self.sdss_all_gals[self.dec_index])[z_bound_indeces[0]:z_bound_indeces[1]] ]
         possible_gal_indeces = [possible_gal_indeces[i] for i in range(len(dec_ang_seps)) if dec_ang_seps[i] < min_ang_sep]
@@ -431,7 +431,7 @@ class PanStars1Archive:
             if i % plot_array_rows == 0: ax.set_xlabel('SDSS photometric redshift')
             if i // plot_array_rows == 0: ax.set_ylabel(r'# Gals in bin in $\Delta \Omega$')
             text_coords = [0.5, max_hist_val * 0.75]
-            ax.text(*text_coords, 'PS1MD Field ' + str(field))
+            ax.text(text_coords[0], text_coords[1], 'PS1MD Field ' + str(field))
 
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         plt.show()
@@ -485,7 +485,7 @@ class PanStars1Archive:
             if i % plot_array_rows == 0: ax.set_xlabel('SDSS comoving-r (Mpc) from photometric redshift')
             if i // plot_array_rows == 0: ax.set_ylabel(r'# Gals Mpc$^{-3}$')
             text_coords = [0.5, max_hist_val * 0.75]
-            ax.text(*text_coords, 'PS1MD Field ' + str(field))
+            ax.text(text_coords[0], text_coords[1], 'PS1MD Field ' + str(field))
 
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
         plt.show()
@@ -659,7 +659,7 @@ class PanStars1Archive:
             axarr[i][2].errorbar(sn_comoving, sn_muDiffs, yerr = sn_muErrs, fmt = 'none', ecolor = sn_colors)
             x_lims = [0.0, max(sn_comoving) * 1.05]
             axarr[i][3].plot(n_gal_centers, (3.0 * (H0 / c_light) ** 2.0 * OmM / 2.0 * smoothing_rad_Mpc) * comoving_to_density_interps[i](np.array(n_gal_centers)) * (1.0 + self.comoving_to_z_interp(np.array(n_gal_centers)))  )
-            axarr[i][2].plot(np.linspace(*x_lims, 1001), (convergences_interps[i])(np.linspace(*x_lims, 1001)), c = 'k')
+            axarr[i][2].plot(np.linspace(x_lims[0], x_lims[1], 1001), (convergences_interps[i])(np.linspace(x_lims[0], x_lims[1], 1001)), c = 'k')
             axarr[i][0].set_xlim(x_lims)
             axarr[i][1].set_xlim(x_lims)
             axarr[i][2].set_xlim(x_lims)
@@ -737,7 +737,7 @@ class PanStars1Archive:
         return 1
 
     def __init__(self, full_sdss_gal_data_file = 'SDSS_fullCoverage_SDSSGals_pzAll.csv', planck_cosmology = 0, H0 = 70.0, OmM = 0.3, OmL = 0.7, OmR = 0.0,
-                 interp_z_params = [0.0, 100.0, 1001], ra_index = 1, dec_index = 2, redshift_index = 11, preloaded_sdss_gals = None, n_healpix_sides = 16, n_quick_index_zs = 100 ):
+                 interp_z_params = [0.0, 100.0, 1001], ra_index = 1, dec_index = 2, redshift_index = 11, preloaded_sdss_gals = None, n_healpix_sides = 16, n_quick_index_zs = 100,  load_sdss_gals = 0 ):
         self.ps_survey = 'PS1MD'
         self.astro_arch = apa.AstronomicalParameterArchive()
         self.sdss_full_gal_data_file = full_sdss_gal_data_file
@@ -768,18 +768,24 @@ class PanStars1Archive:
 
         self.SDSSDir = '/Users/sashabrownsberger/Documents/Harvard/physics/stubbs/SNIsotropyProject/SDSSGalaxies/'
         if preloaded_sdss_gals is None:
-            self.sdss_all_gals = c.readInColumnsToList(self.sdss_full_gal_data_file, self.SDSSDir, n_ignore = 2, delimiter= ',', all_np_readable = 1)
+            if load_sdss_gals:
+                self.sdss_all_gals = c.readInColumnsToList(self.sdss_full_gal_data_file, self.SDSSDir, n_ignore = 2, delimiter= ',', all_np_readable = 1)
+            else:
+                self.sdss_all_gals = preloaded_sdss_gals
         else:
             self.sdss_all_gals = preloaded_sdss_gals
-        self.n_sdss_gals = len(self.sdss_all_gals[redshift_index])
-        quick_index_indeces = [int(i * self.n_sdss_gals / n_quick_index_zs) for i in range(n_quick_index_zs)]
-        quick_index_zs = [self.sdss_all_gals[self.redshift_index][index] for index in quick_index_indeces ]
-        print ('quick_index_indeces = ' + str(quick_index_indeces))
-        self.sdss_z_indeces = {z: np.where(self.sdss_all_gals[self.redshift_index] > z, 1, 0).tolist().index(1) for z in quick_index_zs }
-        print ('self.sdss_z_indeces = ' + str(self.sdss_z_indeces))
-        self.SDSSPhotozs = {key: 'SDSS_PSSuperField' + str(key) + '_SDSSGals_Allpz.csv' for key in [0, 2, 3, 4, 5, 6, 7, 8, 9]}
-        #self.SDSSPhotozs[0] = 'SDSS_fullCoverage_SDSSGals_pzAll.csv'
-        #self.loadRedshiftToProperDistInterp(interp_file = 'PlanckRedshifToComovingInterpForSDSS1.npy')
+        if not(preloaded_sdss_gals is None):
+            self.n_sdss_gals = len(self.sdss_all_gals[redshift_index])
+            quick_index_indeces = [int(i * self.n_sdss_gals / n_quick_index_zs) for i in range(n_quick_index_zs)]
+            quick_index_zs = [self.sdss_all_gals[self.redshift_index][index] for index in quick_index_indeces ]
+            #print ('quick_index_indeces = ' + str(quick_index_indeces))
+            self.sdss_z_indeces = {z: np.where(self.sdss_all_gals[self.redshift_index] > z, 1, 0).tolist().index(1) for z in quick_index_zs }
+            #print ('self.sdss_z_indeces = ' + str(self.sdss_z_indeces))
+            self.SDSSPhotozs = {key: 'SDSS_PSSuperField' + str(key) + '_SDSSGals_Allpz.csv' for key in [0, 2, 3, 4, 5, 6, 7, 8, 9]}
+            #self.SDSSPhotozs[0] = 'SDSS_fullCoverage_SDSSGals_pzAll.csv'
+            #self.loadRedshiftToProperDistInterp(interp_file = 'PlanckRedshifToComovingInterpForSDSS1.npy')
+            self.setSDSSFootprintHEALPixMap(n_healpix_sides) 
+
         if planck_cosmology:
             self.z_to_comoving_interp = self.loadInterp(interp_file = 'PlanckRedshifToComovingInterpForSDSS1.npy')
             self.comoving_to_z_interp = self.loadInterp(interp_file = 'PlanckComovingToRedshiftInterpForSDSS1.npy')
@@ -790,5 +796,3 @@ class PanStars1Archive:
             self.OmR = OmR
             self.interp_z_params = interp_z_params
             self.initialize_r_of_z_interp(self.interp_z_params)
-
-        self.setSDSSFootprintHEALPixMap(n_healpix_sides)

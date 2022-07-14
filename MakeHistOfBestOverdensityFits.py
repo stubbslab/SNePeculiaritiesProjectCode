@@ -8,7 +8,7 @@ if __name__ == "__main__":
     grid_density = 24
     comoving_bin = 100
 
-    rand_field_ids = [i  for i in range(1, 11)]
+    rand_field_ids = [i  for i in range(1, 42)] + [i  for i in range(43, 51)]
     #rand_field_ids = [i  for i in range(1, 101)]
     rand_files = ['OverdensityFit' + str(i) + '_MinNSN_' + str(min_sn) + '_GridDens_' + str(grid_density) + '_BinSize_' + str(comoving_bin) + '_Rand1_fits.txt'  for i in rand_field_ids]
     real_file = 'OverdensityFit' + str(1) + '_MinNSN_' + str(min_sn) + '_GridDens_' + str(grid_density) + '_BinSize_' + str(comoving_bin) + '_Rand0_fits.txt'

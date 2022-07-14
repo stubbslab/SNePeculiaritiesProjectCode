@@ -69,26 +69,30 @@ def ConsolidateSNeFieldFits(grid_density, fitter_ids = [1], data_dir = '/Users/s
 
 
 if __name__ == "__main__":
-    comoving_bin = 150
-    rand = 0
+    comoving_bin = 100
+    rand = 1
     if comoving_bin == 100:
         if rand:
-            fitter_ids = [1,2,3,4,5,6,7,8,9,10, 11, 12, 13]
-            grid_densities = [24 for id in fitter_ids]
-            hemispheres_sets = [ ['both'] for id in fitter_ids]
-            angle_divs_set = [60 for id in fitter_ids]
+            fitter_ids = list(range(42, 43))
+            grid_densities = [24]
+            hemispheres_sets = [ ['both']]
+            angle_divs_set = [60 ]
         else:
             grid_densities =  [ 19,       20,    21,      22,       23,       24,        25,       26,       27,       28,       29,        30,     35,      40,     45,      50,     55,       60 ]
             hemispheres_sets = [['both'],[0,1], ['both'], ['both'], ['both'], ['both'], ['both'], ['both'], ['both'], ['both'], ['both'],  [0,1], ['both'], [0,1], ['both'], [0,1], ['both'], ['both']]
             angle_divs_set = [ 30,       30,    30,      30,       30,       30,        30,       30,       30,       30,       30,        30,     30,      30,     30,      30,     30,       30 ]
             fitter_ids = [1]
     elif comoving_bin == 150:
-        grid_densities =  [ 25,       27,        30,        30,       32,        35,         40,      50,       60 ]
-        hemispheres_sets = [['both'], ['both'],  ['both'],  ['both'],  ['both'], ['both'],  ['both'],  ['both'], ['both']]
-        angle_divs_set = [180,         180,        180,        60,        180,      180,       60,       60,       60]
+        grid_densities =  [ 20,       22,       25,       27,        30,        30,       32,        35,         40,      50,       60 ]
+        hemispheres_sets = [['both'], ['both'], ['both'], ['both'],  ['both'],  ['both'], ['both'], ['both'],  ['both'],  ['both'], ['both']]
+        angle_divs_set =  [ 180,      180,       180,      180,       180,       60,       180,       180,        60,      60,       60]
+        grid_densities = [23]
+        hemispheres_sets = [['both']]
+        angle_divs_set = [180 ]
         fitter_ids = [1]
 
     best_rows = []
+    print ('grid_densities = ' + str(grid_densities))
     for i in range(len(grid_densities)):
         print ('i = ' + str(i))
         grid_density = grid_densities[i]
@@ -99,6 +103,7 @@ if __name__ == "__main__":
                                 min_sn = 14, comoving_bin = comoving_bin, rand = rand, hemispheres = hemispheres, angle_divs = angle_divs, fitter_ids = fitter_ids)[0]
         best_rows = best_rows + [best_row]
         print ('Ratio of real to null r Chi Sqr = ' + str(float(best_row[5]) / float(best_row[6])))
+        print ('best_row = ' + str(best_row))
 
     for i in range(len(grid_densities)):
         print ('For grid density: ' + str(grid_densities[i]))

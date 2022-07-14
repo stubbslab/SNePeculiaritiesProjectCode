@@ -1552,7 +1552,7 @@ class PanStarsFieldManager:
                     params = full_param_points[i]
                     #print ('params = ' + str(params))
                     fits_on_grid[i] = fit_funct_no_gal_dens(params)
-                    if not(print_params): print('\r' + 'Doing coarse (pre-mcmc) fit: ' + str( can.round_to_n(i / len(full_param_points) * 100, 2)) + '% done...', sep=' ', end='', flush=True)
+                    #if not(print_params): print('\r' + 'Doing coarse (pre-mcmc) fit: ' + str( can.round_to_n(i / len(full_param_points) * 100, 2)) + '% done...', sep=' ', end='', flush=True)
                 #fits_on_grid = [fit_funct_no_gal_dens(params) for params in full_param_points]
                 fits_on_grid = np.transpose(np.reshape(fits_on_grid, n_grid_samples))
                 if show_coarse_fit:
@@ -1912,7 +1912,7 @@ class PanStarsFieldManager:
         #print ('comoving_bing = ' + str(comoving_bin))
         nearby_sn_indeces = self.getSNWithinComovingDistance(seed_redshift, shell_coord, comoving_bin)
         if len(nearby_sn_indeces) >= min_n_sn:
-            print ( 'Within ' + str(comoving_bin) + ' Mpc of the coordinate: ' + str([seed_redshift] + shell_coord) + ', we have the following ' + str(len(nearby_sn_indeces)) + ' sn ' + str(nearby_sn_indeces) )
+            #print ( 'Within ' + str(comoving_bin) + ' Mpc of the coordinate: ' + str([seed_redshift] + shell_coord) + ', we have the following ' + str(len(nearby_sn_indeces)) + ' sn ' + str(nearby_sn_indeces) )
             fit_around_coord, full_r_chi_square, full_null_r_chi_square, null_prob = self.doStaticFitOnSNeSubset([seed_redshift] + shell_coord, nearby_sn_indeces, one_d_fit = one_d_fit, init_guess = init_guess, bounds = bounds, method = method, n_grid_samples = n_grid_samples, print_params = print_params, show_coarse_fit = show_coarse_fit)
             fit_param, fit_prob = [fit_around_coord['x'], fit_around_coord['fun']]
             prob_improvement = self.computeProbImprovement( -fit_prob , -null_prob)
@@ -1928,7 +1928,7 @@ class PanStarsFieldManager:
     def doFullFitAroundCoord(self, seed_redshift, shell_coord, comoving_bin, min_n_sn, comoving_bound = None, method = 'CG'):
         nearby_sn_indeces = self.getSNWithinComovingDistance(seed_redshift, shell_coord, comoving_bin)
         if len(nearby_sn_indeces) >= min_n_sn:
-            print ( 'Within ' + str(comoving_bin) + 'Mpc of the coordinate: ' + str([seed_redshift] + shell_coord) + ', we have the following ' + str(len(nearby_sn_indeces)) + ' sn ' + str(nearby_sn_indeces) )
+            #print ( 'Within ' + str(comoving_bin) + 'Mpc of the coordinate: ' + str([seed_redshift] + shell_coord) + ', we have the following ' + str(len(nearby_sn_indeces)) + ' sn ' + str(nearby_sn_indeces) )
 
             fit_around_coord, null_prob = self.doFitOnSNeSubset([seed_redshift] + shell_coord, nearby_sn_indeces, method = method, comoving_bound = comoving_bound)
             fit_params, fit_prob = [fit_around_coord['x'], fit_around_coord['fun']]
@@ -2417,7 +2417,7 @@ class PanStarsFieldManager:
                          [fitted_points[i][1] for i in good_fit_indeces],
                          [fitted_points[i][2] for i in good_fit_indeces]]
         n_good_fits = len(cols_to_save[0])
-        print ('fits = ' + str(fits))
+        #print ('fits = ' + str(fits))
         print ('n_good_fits = ' + str(n_good_fits))
         if n_good_fits > 0:
             n_fit_params = len(fits[good_fit_indeces[0]][0])
@@ -2440,7 +2440,6 @@ class PanStarsFieldManager:
             n_good_fits_to_show of those fits.  In the center of these plots,
             we show the distribution of SNe on the sky.
         """
-        print ('len(fitted_points_spher_coords) = ' + str(len(fitted_points_spher_coords))) 
         if comoving_bin == None:
             if angular_scale == None:
                 angular_scale = self.binning_angular_scale
@@ -2459,12 +2458,9 @@ class PanStarsFieldManager:
         ordered_null_chi_squares = can.niceReverse( ordered_null_chi_squares)
         ordered_improvements = can.niceReverse(ordered_improvements)
         """
-        print ('Where do we get caught up?')
         ordered_points, ordered_param_vals, ordered_r_chi_squares, ordered_null_chi_squares, ordered_improvements = can.safeSortOneListByAnother(fitted_r_chi_squares, [fitted_points, fitted_param_vals, fitted_r_chi_squares, fitted_null_chi_squares, fitted_improvements])
-        print ('Sorted points.')
 
         nearby_sn_indeces = [self.getSNWithinComovingDistance(ordered_points[i][0], ordered_points[i][1:], (self.getComovingCrossSectionOfAngularScaleAtRedshift(ordered_points[i][0], angular_scale) if comoving_bin == None else comoving_bin)) for i in range(len(ordered_points))]
-        print ('Identified neary SNe indeces')
         deg_to_rad = self.astro_arch.getDegToRad()
         cart_points = [point[0] * np.array([np.cos(point[1] * deg_to_rad ) * np.sin((90.0 - point[2]) * deg_to_rad ), np.sin(point[1] * deg_to_rad ) * np.sin((90.0 - point[2]) * deg_to_rad ), np.cos((90.0 - point[2]) * deg_to_rad ) ]) for point in ordered_points]
         xs_cart, ys_cart, zs_cart = [[point[0] for point in cart_points], [point[1] for point in cart_points], [point[2] for point in cart_points] ]
@@ -2494,7 +2490,7 @@ class PanStarsFieldManager:
         #axarr[0,0].set_ylabel(r'$\Delta \mu$ (mag)')
         #axarr[1,0].set_ylabel(r'Dec (deg)')
         #max_n_good_fits_to_show = 7
-        print ('gs_indeces_for_single_fits = '  +str(gs_indeces_for_single_fits))
+        #print ('gs_indeces_for_single_fits = '  +str(gs_indeces_for_single_fits))
         for i in range(min(len(nearby_sn_indeces), max_n_good_fits_to_show, len(gs_indeces_for_single_fits))):
             gs_indeces = gs_indeces_for_single_fits[i]
             #print ('gs_indeces = ' + str(gs_indeces))
@@ -2721,8 +2717,8 @@ def loadPickledPlotter(file_to_load):
 
 
 if __name__ == "__main__":
-    # $ python makePlotOfPS1MDFieldsClass.py 1 24 100 14 0.8 0 1 0 10 1
-    # $ python makePlotOfPS1MDFieldsClass.py 1 24 100 14 0.8 1 1 0 10 1
+    # $ python makePlotOfPS1MDFieldsClass.py 1 28 150 14 0.8 0 both 180 1
+    # $ python makePlotOfPS1MDFieldsClass.py 1 28 150 14 0.8 1 both 180 1
     line_args = sys.argv[1:]
     #fitter_id = line_args[0]
     #field_ids = line_args[1]
@@ -2806,7 +2802,7 @@ if __name__ == "__main__":
 
     if len([fit for fit in fits if fit != None]) > 0:
         final_n_mcmc_steps = 10000
-        final_n_mcmc_steps = 4000
+        #final_n_mcmc_steps = 4000
         field_plotter.n_mcmc_steps = final_n_mcmc_steps
         best_fit_index = np.argmin([fit[1] / fit[2] if fit != None else np.inf for fit in fits ])
         best_fit_point, best_fit_params = [spherical_points[best_fit_index], fits[best_fit_index][0]]
